@@ -1,0 +1,142 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+P	../beta-vae-cartpole.py	/^def P(z):$/;"	kind:function	line:108
+P	../beta-vae.py	/^def P(z):$/;"	kind:function	line:61
+P	../vanilla-vae.py	/^def P(z):$/;"	kind:function	line:60
+P	../visual-transition-cartpole.py	/^def P(z):$/;"	kind:function	line:66
+Q	../beta-vae-cartpole.py	/^def Q(x):$/;"	kind:function	line:88
+Q	../beta-vae.py	/^def Q(x):$/;"	kind:function	line:40
+Q	../vanilla-vae.py	/^def Q(x):$/;"	kind:function	line:40
+Q	../visual-transition-cartpole.py	/^def Q(x):$/;"	kind:function	line:46
+TransitionNet	../visual-transition-cartpole.py	/^class TransitionNet(torch.nn.Module):$/;"	kind:class	line:72
+Whx	../beta-vae-cartpole.py	/^Whx = xavier_init(size = [h_dim, X_dim])$/;"	kind:variable	line:104
+Whx	../beta-vae.py	/^Whx = xavier_init(size = [h_dim, X_dim])$/;"	kind:variable	line:57
+Whx	../vanilla-vae.py	/^Whx = xavier_init(size = [h_dim, X_dim])$/;"	kind:variable	line:56
+Whx	../visual-transition-cartpole.py	/^Whx = xavier_init(size = [hidden_dimension, image_dimension])$/;"	kind:variable	line:62
+Whz_mu	../beta-vae-cartpole.py	/^Whz_mu = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:81
+Whz_mu	../beta-vae.py	/^Whz_mu = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:33
+Whz_mu	../vanilla-vae.py	/^Whz_mu = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:33
+Whz_mu	../visual-transition-cartpole.py	/^Whz_mu = xavier_init(size = [hidden_dimension, state_size])$/;"	kind:variable	line:39
+Whz_var	../beta-vae-cartpole.py	/^Whz_var  = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:84
+Whz_var	../beta-vae.py	/^Whz_var  = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:36
+Whz_var	../vanilla-vae.py	/^Whz_var  = xavier_init(size = [h_dim, Z_dim])$/;"	kind:variable	line:36
+Whz_var	../visual-transition-cartpole.py	/^Whz_var  = xavier_init(size = [hidden_dimension, state_size])$/;"	kind:variable	line:42
+Wxh	../beta-vae-cartpole.py	/^Wxh = xavier_init(size = [X_dim, h_dim])$/;"	kind:variable	line:78
+Wxh	../beta-vae.py	/^Wxh = xavier_init(size = [X_dim, h_dim])$/;"	kind:variable	line:30
+Wxh	../vanilla-vae.py	/^Wxh = xavier_init(size = [X_dim, h_dim])$/;"	kind:variable	line:30
+Wxh	../visual-transition-cartpole.py	/^Wxh = xavier_init(size = [image_dimension, hidden_dimension])$/;"	kind:variable	line:36
+Wzh	../beta-vae-cartpole.py	/^Wzh = xavier_init(size = [Z_dim, h_dim])$/;"	kind:variable	line:101
+Wzh	../beta-vae.py	/^Wzh = xavier_init(size = [Z_dim, h_dim])$/;"	kind:variable	line:54
+Wzh	../vanilla-vae.py	/^Wzh = xavier_init(size = [Z_dim, h_dim])$/;"	kind:variable	line:53
+Wzh	../visual-transition-cartpole.py	/^Wzh = xavier_init(size = [state_size, hidden_dimension])$/;"	kind:variable	line:59
+X	../beta-vae.py	/^    X = Variable(torch.from_numpy(X)).to(device)$/;"	kind:variable	line:75
+X	../vanilla-vae.py	/^    X = Variable(torch.from_numpy(X)).to(device)$/;"	kind:variable	line:74
+X_dim	../beta-vae-cartpole.py	/^X_dim = first_img.shape[0] * first_img.shape[1] * first_img.shape[2]$/;"	kind:variable	line:65
+X_dim	../beta-vae.py	/^X_dim = mnist.train.images.shape[1]$/;"	kind:variable	line:17
+X_dim	../vanilla-vae.py	/^X_dim = mnist.train.images.shape[1]$/;"	kind:variable	line:18
+X_sample	../beta-vae.py	/^    X_sample = P(z)$/;"	kind:variable	line:81
+X_sample	../vanilla-vae.py	/^    X_sample = P(z)$/;"	kind:variable	line:79
+Z_dim	../beta-vae-cartpole.py	/^Z_dim = 128$/;"	kind:variable	line:64
+Z_dim	../beta-vae.py	/^Z_dim = 128$/;"	kind:variable	line:16
+Z_dim	../vanilla-vae.py	/^Z_dim = 128$/;"	kind:variable	line:17
+__init__	../visual-transition-cartpole.py	/^    def __init__(self):$/;"	kind:member	line:73
+action	../basic_test.py	/^        action = env.action_space.sample()$/;"	kind:variable	line:10
+action_dimension	../visual-transition-cartpole.py	/^action_dimension = 2$/;"	kind:variable	line:24
+basic_test.py	../basic_test.py	1;"	kind:file	line:1
+batch_size	../visual-transition-cartpole.py	/^batch_size = 1$/;"	kind:variable	line:21
+beta	../beta-vae-cartpole.py	/^beta = 1.$/;"	kind:variable	line:70
+beta	../beta-vae.py	/^beta = 0.7$/;"	kind:variable	line:22
+beta	../visual-transition-cartpole.py	/^beta = 1.5$/;"	kind:variable	line:28
+beta-vae-cartpole.py	../beta-vae-cartpole.py	1;"	kind:file	line:1
+beta-vae.py	../beta-vae.py	1;"	kind:file	line:1
+bhx	../beta-vae-cartpole.py	/^bhx = Variable(torch.zeros(X_dim, device=device), requires_grad=True)$/;"	kind:variable	line:105
+bhx	../beta-vae.py	/^bhx = Variable(torch.zeros(X_dim, device=device), requires_grad=True)$/;"	kind:variable	line:58
+bhx	../vanilla-vae.py	/^bhx = Variable(torch.zeros(X_dim, device=device), requires_grad=True)$/;"	kind:variable	line:57
+bhx	../visual-transition-cartpole.py	/^bhx = Variable(torch.zeros(image_dimension, device=device), requires_grad=True)$/;"	kind:variable	line:63
+bhz_mu	../beta-vae-cartpole.py	/^bhz_mu = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:82
+bhz_mu	../beta-vae.py	/^bhz_mu = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:34
+bhz_mu	../vanilla-vae.py	/^bhz_mu = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:34
+bhz_mu	../visual-transition-cartpole.py	/^bhz_mu = Variable(torch.zeros(state_size, device=device), requires_grad=True)$/;"	kind:variable	line:40
+bhz_var	../beta-vae-cartpole.py	/^bhz_var = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:85
+bhz_var	../beta-vae.py	/^bhz_var = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:37
+bhz_var	../vanilla-vae.py	/^bhz_var = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:37
+bhz_var	../visual-transition-cartpole.py	/^bhz_var = Variable(torch.zeros(state_size, device=device), requires_grad=True)$/;"	kind:variable	line:43
+bxh	../beta-vae-cartpole.py	/^bxh = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:79
+bxh	../beta-vae.py	/^bxh = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:31
+bxh	../vanilla-vae.py	/^bxh = Variable(torch.zeros(Z_dim, device=device), requires_grad=True)$/;"	kind:variable	line:31
+bxh	../visual-transition-cartpole.py	/^bxh = Variable(torch.zeros(state_size, device=device), requires_grad=True)$/;"	kind:variable	line:37
+bzh	../beta-vae-cartpole.py	/^bzh = Variable(torch.zeros(h_dim, device=device), requires_grad=True)$/;"	kind:variable	line:102
+bzh	../beta-vae.py	/^bzh = Variable(torch.zeros(h_dim, device=device), requires_grad=True)$/;"	kind:variable	line:55
+bzh	../vanilla-vae.py	/^bzh = Variable(torch.zeros(h_dim, device=device), requires_grad=True)$/;"	kind:variable	line:54
+bzh	../visual-transition-cartpole.py	/^bzh = Variable(torch.zeros(hidden_dimension, device=device), requires_grad=True)$/;"	kind:variable	line:60
+c	../beta-vae-cartpole.py	/^c = 0$/;"	kind:variable	line:67
+c	../beta-vae.py	/^c = 0$/;"	kind:variable	line:19
+c	../vanilla-vae.py	/^c = 0$/;"	kind:variable	line:21
+cartpole_image_interface.py	../cartpole_image_interface.py	1;"	kind:file	line:1
+darla.py	../darla.py	1;"	kind:file	line:1
+device	../beta-vae-cartpole.py	/^device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")$/;"	kind:variable	line:58
+device	../beta-vae.py	/^device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")$/;"	kind:variable	line:12
+device	../vanilla-vae.py	/^device = "cpu"$/;"	kind:variable	line:13
+device	../visual-transition-cartpole.py	/^device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")$/;"	kind:variable	line:17
+env	../basic_test.py	/^    env = gym.make("cartpole-visual-v1")$/;"	kind:variable	line:7
+first_img	../beta-vae-cartpole.py	/^first_img = cv2.imread(pics_folder + "observation_0_0.jpg", flags=cv2.IMREAD_COLOR)$/;"	kind:variable	line:61
+first_img	../visual-transition-cartpole.py	/^first_img = get_first_img()$/;"	kind:variable	line:19
+forward	../visual-transition-cartpole.py	/^    def forward(self, s):$/;"	kind:member	line:78
+forward_pass	../visual-transition-cartpole.py	/^def forward_pass(T, image, action):$/;"	kind:function	line:172
+get_first_img	../cartpole_image_interface.py	/^def get_first_img(pics_folder="randpics\/"):$/;"	kind:function	line:5
+h_dim	../beta-vae-cartpole.py	/^h_dim = 128$/;"	kind:variable	line:66
+h_dim	../beta-vae.py	/^h_dim = 128$/;"	kind:variable	line:18
+h_dim	../vanilla-vae.py	/^h_dim = 128$/;"	kind:variable	line:20
+hidden_dimension	../visual-transition-cartpole.py	/^hidden_dimension = 128$/;"	kind:variable	line:25
+image_dimension	../visual-transition-cartpole.py	/^image_dimension = first_img.shape[0] * first_img.shape[1] * first_img.shape[2]$/;"	kind:variable	line:23
+kl_loss	../beta-vae.py	/^    kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)$/;"	kind:variable	line:85
+kl_loss	../vanilla-vae.py	/^    kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)$/;"	kind:variable	line:83
+loss	../beta-vae.py	/^    loss = recon_loss + beta * kl_loss$/;"	kind:variable	line:86
+loss	../vanilla-vae.py	/^    loss = recon_loss + kl_loss$/;"	kind:variable	line:84
+lr	../beta-vae-cartpole.py	/^lr = 1e-6$/;"	kind:variable	line:68
+lr	../beta-vae.py	/^lr = 1e-3$/;"	kind:variable	line:20
+lr	../vanilla-vae.py	/^lr = 1e-3$/;"	kind:variable	line:22
+lr	../visual-transition-cartpole.py	/^lr = 1e-6$/;"	kind:variable	line:27
+main	../beta-vae-cartpole.py	/^def main():$/;"	kind:function	line:114
+main	../visual-transition-cartpole.py	/^def main():$/;"	kind:function	line:185
+main_old	../visual-transition-cartpole.py	/^def main_old():$/;"	kind:function	line:84
+mb_size	../beta-vae-cartpole.py	/^mb_size = 50$/;"	kind:variable	line:63
+mb_size	../beta-vae.py	/^mb_size = 64$/;"	kind:variable	line:15
+mb_size	../vanilla-vae.py	/^mb_size = 64$/;"	kind:variable	line:16
+mnist	../beta-vae.py	/^mnist = input_data.read_data_sets('..\/MNIST_data', one_hot=True)$/;"	kind:variable	line:14
+mnist	../vanilla-vae.py	/^mnist = input_data.read_data_sets('..\/MNIST_data', one_hot=True)$/;"	kind:variable	line:15
+normalize_observation	../visual-transition-cartpole.py	/^def normalize_observation(observation):$/;"	kind:function	line:165
+observation	../basic_test.py	/^    observation = env.reset()$/;"	kind:variable	line:8
+params	../beta-vae.py	/^params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]$/;"	kind:variable	line:69
+params	../vanilla-vae.py	/^params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]$/;"	kind:variable	line:68
+pics_folder	../beta-vae-cartpole.py	/^pics_folder = "randpics\/"$/;"	kind:variable	line:13
+read_file	../beta-vae-cartpole.py	/^def read_file(i_episode, j_step):$/;"	kind:function	line:16
+read_file	../cartpole_image_interface.py	/^def read_file(i_episode, j_step, pics_folder="randpics\/"):$/;"	kind:function	line:8
+read_next_batch	../beta-vae-cartpole.py	/^def read_next_batch(batch_size):$/;"	kind:function	line:44
+read_next_batch	../cartpole_image_interface.py	/^def read_next_batch(batch_size):$/;"	kind:function	line:36
+read_next_file	../beta-vae-cartpole.py	/^def read_next_file():$/;"	kind:function	line:26
+read_next_file	../cartpole_image_interface.py	/^def read_next_file():$/;"	kind:function	line:18
+recon_loss	../beta-vae.py	/^    recon_loss = nn.binary_cross_entropy(X_sample, X, size_average=False)$/;"	kind:variable	line:84
+recon_loss	../vanilla-vae.py	/^    recon_loss = nn.binary_cross_entropy(X_sample, X, size_average=False)$/;"	kind:variable	line:82
+sample_z	../beta-vae-cartpole.py	/^def sample_z(mu, log_var):$/;"	kind:function	line:95
+sample_z	../beta-vae.py	/^def sample_z(mu, log_var):$/;"	kind:function	line:48
+sample_z	../vanilla-vae.py	/^def sample_z(mu, log_var):$/;"	kind:function	line:47
+sample_z	../visual-transition-cartpole.py	/^def sample_z(mu, log_var):$/;"	kind:function	line:53
+solver	../beta-vae.py	/^solver = optim.Adam(params, lr=lr)$/;"	kind:variable	line:71
+solver	../vanilla-vae.py	/^solver = optim.Adam(params, lr=lr)$/;"	kind:variable	line:70
+state_size	../visual-transition-cartpole.py	/^state_size = 128$/;"	kind:variable	line:22
+vanilla-vae.py	../vanilla-vae.py	1;"	kind:file	line:1
+visual-transition-cartpole.py	../visual-transition-cartpole.py	1;"	kind:file	line:1
+writer	../beta-vae-cartpole.py	/^writer = SummaryWriter("runs\/test1")$/;"	kind:variable	line:14
+writer	../visual-transition-cartpole.py	/^writer = SummaryWriter("runs\/test")$/;"	kind:variable	line:16
+xavier_init	../beta-vae-cartpole.py	/^def xavier_init(size):$/;"	kind:function	line:73
+xavier_init	../beta-vae.py	/^def xavier_init(size):$/;"	kind:function	line:25
+xavier_init	../vanilla-vae.py	/^def xavier_init(size):$/;"	kind:function	line:25
+xavier_init	../visual-transition-cartpole.py	/^def xavier_init(size):$/;"	kind:function	line:31
+y_dim	../vanilla-vae.py	/^y_dim = mnist.train.labels.shape[1]$/;"	kind:variable	line:19
+z	../beta-vae.py	/^    z = sample_z(z_mu, z_var)$/;"	kind:variable	line:80
+z	../vanilla-vae.py	/^    z = sample_z(z_mu, z_var)$/;"	kind:variable	line:78
