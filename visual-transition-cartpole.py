@@ -26,10 +26,12 @@ rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
-hidden_dimension = 10
+hidden_dimension = 1000
 # c = 0
-lr = 1e-7
-beta = 1.5
+lr = 1e-6
+beta = 0.2
+prediction_loss_term = 0.005
+loss_multiplier = 100.
 
 # Prereqs for encoder network
 def xavier_init(size):
@@ -77,16 +79,18 @@ class TransitionNet(torch.nn.Module):
     def __init__(self):
         super(TransitionNet, self).__init__()
         self.fc1 = torch.nn.Linear(state_size + action_size, state_size + action_size)
-        self.fc2 = torch.nn.Linear(state_size + action_size, state_size + action_size)
+        self.fc2 = torch.nn.Linear(state_size + action_size, 100)
+        self.fc3 = torch.nn.Linear(100, state_size + action_size)
 
     def forward(self, s):
         s = nn.relu(self.fc1(s))
         s = nn.relu(self.fc2(s))
+        s = nn.relu(self.fc3(s))
         return s
 
 def normalize_observation(observation):
-    observation = cv2.resize(observation, img_size)
-    observation = observation.flatten()
+    observation = cv2.resize(observation, (img_size[1], img_size[0]))
+    observation = observation.reshape(image_dimension)
     observation = Variable(torch.from_numpy(observation.copy())).to(device)
     observation = observation.float() / 255.
     assert ((observation >= 0.).all() and (observation <= 1.).all())
@@ -108,9 +112,12 @@ def forward_pass(T, image, action):
 
 def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, total_loss):
     writer.add_scalar("Reconstruction Loss", recon_loss, it)
+    writer.add_scalar("Scaled Reconstruction Loss", (1. - prediction_loss_term) * (1. - beta) * recon_loss, it)
     writer.add_scalar("KL Loss", kl_loss, it)
+    writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * beta * kl_loss, it)
     if prediction_loss is not None:
         writer.add_scalar("Prediction Loss", prediction_loss, it)
+        writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
     writer.add_scalar("Total Loss", total_loss, it)
 
 def save_weights(it, params):
@@ -126,6 +133,15 @@ def save_weights(it, params):
         torch.save(params[8], "models/initial/Whx")
         torch.save(params[9], "models/initial/bhx")
         # print("saved iter", it)
+
+def pytorch_to_cv(img):
+    input_numpy = img.detach().cpu().numpy()
+    input_reshaped = input_numpy.reshape(img_size[0], img_size[1], 3)
+    input_reshaped = input_reshaped[...,::-1]
+    input_reshaped = np.round(input_reshaped * 255.)
+    input_reshaped = input_reshaped.astype(int)
+
+    return input_reshaped
 
 def main():
     # Setup
@@ -160,6 +176,9 @@ def main():
             # Forward pass of the network
             extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_image, action)
 
+            if i_episode % 100 == 0:
+                cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_image))
+                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
@@ -167,10 +186,10 @@ def main():
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
             if predicted_state is not None:
                 prediction_loss = predicted_state_loss_f(predicted_state, torch.cat((extracted_state, torch.tensor([[action]], dtype=torch.float).to(device)), 1))
-                loss = recon_loss + beta * kl_loss + prediction_loss
+                loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
                 write_to_tensorboard(writer, i_episode * 100 + t, recon_loss, kl_loss, prediction_loss, loss)
             else:
-                loss = recon_loss + beta * kl_loss
+                loss = ((1. - beta) * recon_loss + beta * kl_loss) * loss_multiplier
                 write_to_tensorboard(writer, i_episode * 100 + t, recon_loss, kl_loss, None, loss)
 
             # Save weights
