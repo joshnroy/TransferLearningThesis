@@ -55,6 +55,20 @@ def Q(x):
     z_var = h @ Whz_var + bhz_var.repeat(h.size(0), 1)
     return z_mu, z_var
 
+# Encoder Network
+class EncoderNet(torch.nn.Module):
+    def __init__(self):
+        super(EncoderNet, self).__init__()
+        self.input_to_hidden = torch.nn.Linear(image_dimension, hidden_dimension)
+        self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
+        self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
+
+    def forward(self, x):
+        h = nn.relu(self.input_to_hidden(x))
+        mu = self.hidden_to_mu(h)
+        var = self.hidden_to_var(h)
+        return mu, var
+
 # Sample from encoder network
 def sample_z(mu, log_var):
     # Using reparameterization trick to sample from a gaussian
@@ -74,6 +88,18 @@ def P(z):
     X = nn.sigmoid(torch.mm(h, Whx) + bhx.repeat(h.size(0), 1))
     return X
 
+# Decoder Network
+class DecoderNet(torch.nn.Module):
+    def __init__(self):
+        super(DecoderNet, self).__init__()
+        self.input_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
+        self.hidden_to_reconstructed = torch.nn.Linear(hidden_dimension, image_dimension)
+    
+    def forward(self, z):
+        h = nn.relu(self.input_to_hidden(z))
+        X = nn.sigmoid(self.hidden_to_reconstructed(h))
+        return X
+
 # Transition Network
 class TransitionNet(torch.nn.Module):
     def __init__(self):
@@ -85,7 +111,7 @@ class TransitionNet(torch.nn.Module):
     def forward(self, s):
         s = nn.relu(self.fc1(s))
         s = nn.relu(self.fc2(s))
-        s = nn.relu(self.fc3(s))
+        s = self.fc3(s)
         return s
 
 def normalize_observation(observation):
@@ -97,13 +123,13 @@ def normalize_observation(observation):
 
     return observation
 
-def forward_pass(T, image, action):
+def forward_pass(T, image, action, encoder, decoder):
     # Extract state, renderparams
-    z_mu, z_var = Q(image)
+    z_mu, z_var = encoder(image)
     state = sample_z(z_mu, z_var)
 
     # Decode image from state
-    reconstructed_image = P(state)
+    reconstructed_image = decoder(state)
 
     # Predict next_state
     next_state = T(torch.cat((state, torch.tensor([[action]], dtype=torch.float).to(device)), 1))
@@ -150,10 +176,19 @@ def main():
     T = TransitionNet().to(device)
     T.train()
 
+    encoder = EncoderNet().to(device)
+    encoder.train()
+    decoder = DecoderNet().to(device)
+    decoder.train()
+
     # Make Autoencoder Network
-    params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]
+    # params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]
 
     # Set solver
+    params = []
+    params += [x for x in encoder.parameters()]
+    params += [x for x in decoder.parameters()]
+    params += [x for x in T.parameters()]
     solver = optim.Adam(params, lr=lr)
 
     # Losses
@@ -162,6 +197,7 @@ def main():
 
     # Main loop
     env = gym.make("cartpole-visual-v1")
+    step = 0
     for i_episode in range(2000):
         observation = env.reset()
         for t in range(100):
@@ -174,7 +210,7 @@ def main():
             input_image = normalize_observation(observation)
 
             # Forward pass of the network
-            extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_image, action)
+            extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_image, action, encoder, decoder)
 
             if i_episode % 100 == 0:
                 cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_image))
@@ -187,23 +223,24 @@ def main():
             if predicted_state is not None:
                 prediction_loss = predicted_state_loss_f(predicted_state, torch.cat((extracted_state, torch.tensor([[action]], dtype=torch.float).to(device)), 1))
                 loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
-                write_to_tensorboard(writer, i_episode * 100 + t, recon_loss, kl_loss, prediction_loss, loss)
+                write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
             else:
                 loss = ((1. - beta) * recon_loss + beta * kl_loss) * loss_multiplier
-                write_to_tensorboard(writer, i_episode * 100 + t, recon_loss, kl_loss, None, loss)
+                write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
 
             # Save weights
-            save_weights(t, params)
+            # save_weights(t, params)
             
             # Backward pass
             loss.backward(retain_graph=True)
 
             # Update
             solver.step()
+            step += 1
 
             # Housekeeping
-            for p in params:
-                p.grad.data.zero_()
+            # for p in params:
+            #     p.grad.data.zero_()
 
             predicted_state = next_state
 
