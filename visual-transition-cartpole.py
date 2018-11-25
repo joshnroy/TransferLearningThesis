@@ -214,7 +214,7 @@ def main():
 
             if i_episode % 100 == 0:
                 cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_image))
-                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
+                cv2.imwrite("pics/" + str(i_ episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
