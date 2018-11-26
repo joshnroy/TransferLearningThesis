@@ -198,10 +198,10 @@ def main():
             loss.backward(retain_graph=True)
 
             # Update
-            lr = 1. / step if step != 0 else 1.
+            adaptive_lr = 1. / step if step != 0 else 1.
             for g in solver.param_groups:
-                g['lr'] = lr
-                writer.add_scalar("Learning Rate", lr, step)
+                g['lr'] = adaptive_lr
+                writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
 
