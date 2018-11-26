@@ -35,7 +35,7 @@ hidden_dimension = 1000
 # c = 0
 lr = 1e-6
 beta = 0.2
-prediction_loss_term = 0.01
+prediction_loss_term = 0.1
 loss_multiplier = 100.
 
 # Prereqs for encoder network
