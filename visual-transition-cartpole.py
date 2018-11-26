@@ -14,6 +14,11 @@ from cartpole_image_interface import read_next_batch, get_first_img
 import gym
 import gym_cartpole_visual
 
+from pyvirtualdisplay import Display
+
+display = Display(visible=0, size=(1920, 1080))
+display.start()
+
 writer = SummaryWriter("runs/initial")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -198,7 +203,7 @@ def main():
     # Main loop
     env = gym.make("cartpole-visual-v1")
     step = 0
-    for i_episode in range(2000):
+    for i_episode in range(5000):
         observation = env.reset()
         for t in range(100):
             # Take a random action
@@ -214,7 +219,7 @@ def main():
 
             if i_episode % 100 == 0:
                 cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_image))
-                cv2.imwrite("pics/" + str(i_ episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
+                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
