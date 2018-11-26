@@ -38,28 +38,6 @@ beta = 0.2
 prediction_loss_term = 0.1
 loss_multiplier = 100.
 
-# Prereqs for encoder network
-def xavier_init(size):
-    in_dim = size[0]
-    xavier_stddev = 1. / np.sqrt(in_dim / 2.)
-    return Variable(torch.randn(*size, device=device) * xavier_stddev, requires_grad=True)
-
-Wxh = xavier_init(size = [image_dimension, hidden_dimension])
-bxh = Variable(torch.zeros(hidden_dimension, device=device), requires_grad=True)
-
-Whz_mu = xavier_init(size = [hidden_dimension, state_size])
-bhz_mu = Variable(torch.zeros(state_size, device=device), requires_grad=True)
-
-Whz_var  = xavier_init(size = [hidden_dimension, state_size])
-bhz_var = Variable(torch.zeros(state_size, device=device), requires_grad=True)
-
-# Encoder Network
-def Q(x):
-    h = nn.relu(x @ Wxh + bxh.repeat(1, 1))
-    z_mu = h @ Whz_mu + bhz_mu.repeat(h.size(0), 1)
-    z_var = h @ Whz_var + bhz_var.repeat(h.size(0), 1)
-    return z_mu, z_var
-
 # Encoder Network
 class EncoderNet(torch.nn.Module):
     def __init__(self):
@@ -79,19 +57,6 @@ def sample_z(mu, log_var):
     # Using reparameterization trick to sample from a gaussian
     eps = Variable(torch.randn(batch_size, state_size)).to(device)
     return mu + torch.exp(log_var / 2) * eps
-
-# Pre-reqs for decoder network
-Wzh = xavier_init(size = [state_size, hidden_dimension])
-bzh = Variable(torch.zeros(hidden_dimension, device=device), requires_grad=True)
-
-Whx = xavier_init(size = [hidden_dimension, image_dimension])
-bhx = Variable(torch.zeros(image_dimension, device=device), requires_grad=True)
-
-# Decoder Network
-def P(z):
-    h = nn.relu(z @ Wzh + bzh.repeat(z.size(0), 1))
-    X = nn.sigmoid(torch.mm(h, Whx) + bhx.repeat(h.size(0), 1))
-    return X
 
 # Decoder Network
 class DecoderNet(torch.nn.Module):
@@ -151,19 +116,12 @@ def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, total
         writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
     writer.add_scalar("Total Loss", total_loss, it)
 
-def save_weights(it, params):
-    if it % 10 == 0:
-        torch.save(params[0], "models/initial/Wxh")
-        torch.save(params[1], "models/initial/bxh")
-        torch.save(params[2], "models/initial/Whz_mu")
-        torch.save(params[3], "models/initial/bhz_mu")
-        torch.save(params[4], "models/initial/Whz_var")
-        torch.save(params[5], "models/initial/bhz_var")
-        torch.save(params[6], "models/initial/Wzh")
-        torch.save(params[7], "models/initial/bzh")
-        torch.save(params[8], "models/initial/Whx")
-        torch.save(params[9], "models/initial/bhx")
-        # print("saved iter", it)
+def save_weights(it, encoder, decoder, transition):
+    if it % 100 == 0:
+        torch.save(encoder, "models/encoder_model_" + str(it) + ".pt")
+        torch.save(decoder, "models/decoder_model_" + str(it) + ".pt")
+        torch.save(transition, "models/transition_model_" + str(it) + ".pt")
+
 
 def pytorch_to_cv(img):
     input_numpy = img.detach().cpu().numpy()
@@ -234,7 +192,7 @@ def main():
                 write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
 
             # Save weights
-            # save_weights(t, params)
+            save_weights(t, params)
             
             # Backward pass
             loss.backward(retain_graph=True)
@@ -242,10 +200,6 @@ def main():
             # Update
             solver.step()
             step += 1
-
-            # Housekeeping
-            # for p in params:
-            #     p.grad.data.zero_()
 
             predicted_state = next_state
 
