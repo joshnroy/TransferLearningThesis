@@ -198,6 +198,9 @@ def main():
             loss.backward(retain_graph=True)
 
             # Update
+            for g in solver.param_groups:
+                g['lr'] = 1. / step
+                writer.add_scalar("Learning Rate", 1. / step, step)
             solver.step()
             step += 1
 
