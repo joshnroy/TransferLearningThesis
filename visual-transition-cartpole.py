@@ -192,7 +192,7 @@ def main():
                 write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
 
             # Save weights
-            save_weights(t, params)
+            save_weights(t, encoder, decoder, T)
             
             # Backward pass
             loss.backward(retain_graph=True)
