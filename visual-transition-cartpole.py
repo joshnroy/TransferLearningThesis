@@ -199,7 +199,7 @@ def main():
 
             # Update
             for g in solver.param_groups:
-                g['lr'] = 1. / step
+                g['lr'] = 1. / step if step != 0 else 1.
                 writer.add_scalar("Learning Rate", 1. / step, step)
             solver.step()
             step += 1
