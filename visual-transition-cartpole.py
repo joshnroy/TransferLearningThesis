@@ -207,7 +207,7 @@ def main():
 
             predicted_state = next_state[0:49]
             extracted_state_with_action = extracted_state_with_action[1:50]
-            prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action)
+            prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action) / batch_size
             loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
             write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
 
