@@ -25,7 +25,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 first_img = get_first_img()
 
 img_size = (50, 75)
-batch_size = 1
+batch_size = 50
 state_size = 1000
 rp_size = 5
 action_size = 1
@@ -87,8 +87,8 @@ class TransitionNet(torch.nn.Module):
 def normalize_observation(observation):
     observation = cv2.resize(observation, (img_size[1], img_size[0]))
     observation = observation.reshape(image_dimension)
-    observation = Variable(torch.from_numpy(observation.copy())).to(device)
-    observation = observation.float() / 255.
+    observation = observation.copy()
+    observation = observation / 255.
     assert ((observation >= 0.).all() and (observation <= 1.).all())
 
     return observation
@@ -102,7 +102,7 @@ def forward_pass(T, image, action, encoder, decoder):
     reconstructed_image = decoder(state)
 
     # Predict next_state
-    next_state = T(torch.cat((state, torch.tensor([[action]], dtype=torch.float).to(device)), 1))
+    next_state = T(torch.cat((state, action), 1))
 
     return state, next_state, reconstructed_image, z_mu, z_var
 
@@ -117,7 +117,7 @@ def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, total
     writer.add_scalar("Total Loss", total_loss, it)
 
 def save_weights(it, encoder, decoder, transition):
-    if it % 100 == 0:
+    if it % 1000 == 0:
         torch.save(encoder, "models/encoder_model_" + str(it) + ".pt")
         torch.save(decoder, "models/decoder_model_" + str(it) + ".pt")
         torch.save(transition, "models/transition_model_" + str(it) + ".pt")
@@ -131,6 +131,31 @@ def pytorch_to_cv(img):
     input_reshaped = input_reshaped.astype(int)
 
     return input_reshaped
+
+def get_batch_and_actions(env, batch_size):
+    batch = []
+    actions = []
+
+
+    for _ in range(batch_size):
+        # Take a random action
+        action = env.action_space.sample()
+        actions.append([action])
+
+        # Run the simulation
+        observation, reward, done, info = env.step(action)
+
+        # Normalize Observation
+        input_image = normalize_observation(observation)
+        batch.append(input_image)
+
+        if done:
+            observation = env.reset()
+    
+    batch = torch.from_numpy(np.array(batch, dtype=np.float32)).to(device)
+    actions = torch.from_numpy(np.array(actions, dtype=np.float32)).to(device)
+
+    return batch, actions
 
 def main():
     # Setup
@@ -156,7 +181,7 @@ def main():
 
     # Losses
     predicted_state_loss_f = torch.nn.MSELoss()
-    predicted_state = None
+    # predicted_state = None
 
     # Main loop
     env = gym.make("cartpole-visual-v1")
@@ -164,32 +189,38 @@ def main():
     for i_episode in range(5000):
         observation = env.reset()
         for t in range(100):
-            # Take a random action
-            action = env.action_space.sample()
 
-            observation, reward, done, info = env.step(action)
-
-            # Run the simulation
-            input_image = normalize_observation(observation)
+            input_batch, actions = get_batch_and_actions(env, batch_size)
 
             # Forward pass of the network
-            extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_image, action, encoder, decoder)
+            extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_batch, actions, encoder, decoder)
+            extracted_state_with_action = torch.cat((extracted_state, actions), 1)
 
-            if i_episode % 100 == 0:
-                cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_image))
-                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image))
+            if i_episode % 1000 == 0:
+                cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_batch[0]))
+                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image[0]))
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
-            recon_loss = nn.binary_cross_entropy(reconstructed_image, input_image)
+            recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
-            if predicted_state is not None:
-                prediction_loss = predicted_state_loss_f(predicted_state, torch.cat((extracted_state, torch.tensor([[action]], dtype=torch.float).to(device)), 1))
-                loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
-                write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
-            else:
-                loss = ((1. - beta) * recon_loss + beta * kl_loss) * loss_multiplier
-                write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
+
+            predicted_state = next_state[0:49]
+            extracted_state_with_action = extracted_state_with_action[1:50]
+            prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action)
+            loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
+            write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
+
+
+            # if predicted_state is not None:
+            #     predicted_state = next_state[0:49]
+            #     extracted_state_with_action = extracted_state_with_action[1:50]
+            #     prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action)
+            #     loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
+            #     write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
+            # else:
+            #     loss = ((1. - beta) * recon_loss + beta * kl_loss) * loss_multiplier
+            #     write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
 
             # Save weights
             save_weights(t, encoder, decoder, T)
@@ -198,18 +229,16 @@ def main():
             loss.backward(retain_graph=True)
 
             # Update
-            adaptive_lr = min((1/(10**(3/13000)))**step if step != 0 else 1., 1e-6)
-            for g in solver.param_groups:
-                g['lr'] = adaptive_lr
-                writer.add_scalar("Learning Rate", adaptive_lr, step)
+            # adaptive_lr = min((1/(10**(3/13000)))**step if step != 0 else 1., 1e-6)
+            # for g in solver.param_groups:
+            #     g['lr'] = adaptive_lr
+            #     writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
 
-            predicted_state = next_state
+            print(i_episode, t)
 
-            if done:
-                print("Episode {} finished".format(i_episode))
-                break
+            # predicted_state = next_state
     
 
 if __name__ == "__main__":
