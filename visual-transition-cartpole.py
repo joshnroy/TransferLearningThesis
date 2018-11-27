@@ -26,7 +26,7 @@ first_img = get_first_img()
 
 img_size = (50, 75)
 batch_size = 1
-state_size = 10
+state_size = 1000
 rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
