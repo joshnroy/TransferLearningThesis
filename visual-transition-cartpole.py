@@ -25,7 +25,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 first_img = get_first_img()
 
 img_size = (50, 75)
-batch_size = 50
+batch_size = 100
 state_size = 1000
 rp_size = 5
 action_size = 1
@@ -35,7 +35,7 @@ hidden_dimension = 1000
 # c = 0
 lr = 1e-6
 beta = 0.2
-prediction_loss_term = 0.1
+prediction_loss_term = 0.001
 loss_multiplier = 100.
 
 # Encoder Network
@@ -205,8 +205,8 @@ def main():
             recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
-            predicted_state = next_state[0:49]
-            extracted_state_with_action = extracted_state_with_action[1:50]
+            predicted_state = next_state[0:(batch_size - 1)]
+            extracted_state_with_action = extracted_state_with_action[1:batch_size]
             prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action) / batch_size
             loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
             write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
