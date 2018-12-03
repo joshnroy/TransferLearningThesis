@@ -202,7 +202,7 @@ def main():
             extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_batch, actions, encoder, decoder)
             extracted_state_with_action = torch.cat((extracted_state, actions), 1)
 
-            if i_episode % 1000 == 0:
+            if i_episode % 10 == 0:
                 cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_batch[0]))
                 cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image[0]))
 
