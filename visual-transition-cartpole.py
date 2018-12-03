@@ -31,7 +31,7 @@ rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
-hidden_dimension = 1000
+hidden_dimension = 6 * 71 * 46
 # c = 0
 lr = 1e-6
 beta = 0.2
@@ -42,14 +42,16 @@ loss_multiplier = 100.
 class EncoderNet(torch.nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
-        self.input_to_hidden = torch.nn.Linear(image_dimension, hidden_dimension)
+        self.input_to_hidden = torch.nn.Conv2d(3, 6, 5)
+        self.pool = torch.nn.MaxPool2d(2, 2)
         self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
 
     def forward(self, x):
-        h = nn.relu(self.input_to_hidden(x))
-        mu = self.hidden_to_mu(h)
-        var = self.hidden_to_var(h)
+        h = self.input_to_hidden(x)
+        h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
+        mu = self.hidden_to_mu(h_flattened)
+        var = self.hidden_to_var(h_flattened)
         return mu, var
 
 # Sample from encoder network
@@ -62,12 +64,15 @@ def sample_z(mu, log_var):
 class DecoderNet(torch.nn.Module):
     def __init__(self):
         super(DecoderNet, self).__init__()
-        self.input_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
-        self.hidden_to_reconstructed = torch.nn.Linear(hidden_dimension, image_dimension)
+        self.state_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
+        self.unpool = torch.nn.MaxUnpool2d(2, 2)
+        self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 5)
     
     def forward(self, z):
-        h = nn.relu(self.input_to_hidden(z))
-        X = nn.sigmoid(self.hidden_to_reconstructed(h))
+        h = nn.relu(self.state_to_hidden(z))
+        h_unflattened = torch.reshape(h, (batch_size, 6, 71, 46))
+        # h_unpooled = self.unpool(h_unflattened)
+        X = nn.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
 # Transition Network
@@ -86,7 +91,8 @@ class TransitionNet(torch.nn.Module):
 
 def normalize_observation(observation):
     observation = cv2.resize(observation, (img_size[1], img_size[0]))
-    observation = observation.reshape(image_dimension)
+    observation = np.transpose(observation, (2, 1, 0))
+    # observation = observation.reshape(image_dimension)
     observation = observation.copy()
     observation = observation / 255.
     assert ((observation >= 0.).all() and (observation <= 1.).all())
@@ -125,12 +131,12 @@ def save_weights(it, encoder, decoder, transition):
 
 def pytorch_to_cv(img):
     input_numpy = img.detach().cpu().numpy()
-    input_reshaped = input_numpy.reshape(img_size[0], img_size[1], 3)
-    input_reshaped = input_reshaped[...,::-1]
-    input_reshaped = np.round(input_reshaped * 255.)
-    input_reshaped = input_reshaped.astype(int)
+    # input_reshaped = input_numpy.reshape(img_size[0], img_size[1], 3)
+    input_numpy = np.transpose(input_numpy, (2, 1, 0))
+    input_numpy = np.round(input_numpy * 255.)
+    input_numpy = input_numpy.astype(int)
 
-    return input_reshaped
+    return input_numpy
 
 def get_batch_and_actions(env, batch_size):
     batch = []
