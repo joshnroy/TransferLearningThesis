@@ -31,18 +31,18 @@ rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
-hidden_dimension = 6 * 71 * 46
+hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 1e-6
+lr = 1e-5
 beta = 0.2
-prediction_loss_term = 0.001
+prediction_loss_term = 0.0
 loss_multiplier = 100.
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
-        self.input_to_hidden = torch.nn.Conv2d(3, 6, 5)
+        self.input_to_hidden = torch.nn.Conv2d(3, 6, 2)
         self.pool = torch.nn.MaxPool2d(2, 2)
         self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
@@ -66,13 +66,13 @@ class DecoderNet(torch.nn.Module):
         super(DecoderNet, self).__init__()
         self.state_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
         self.unpool = torch.nn.MaxUnpool2d(2, 2)
-        self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 5)
+        self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 2)
     
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
-        h_unflattened = torch.reshape(h, (batch_size, 6, 71, 46))
+        h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
         # h_unpooled = self.unpool(h_unflattened)
-        X = nn.sigmoid(self.hidden_to_reconstructed(h_unflattened))
+        X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
 # Transition Network
@@ -202,7 +202,7 @@ def main():
             extracted_state, next_state, reconstructed_image, z_mu, z_var = forward_pass(T, input_batch, actions, encoder, decoder)
             extracted_state_with_action = torch.cat((extracted_state, actions), 1)
 
-            if i_episode % 10 == 0:
+            if t % 50 == 0:
                 cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_batch[0]))
                 cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image[0]))
 
@@ -210,6 +210,7 @@ def main():
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
             recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
+
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
