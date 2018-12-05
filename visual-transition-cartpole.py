@@ -16,7 +16,7 @@ import gym_cartpole_visual
 
 from pyvirtualdisplay import Display
 
-display = Display(visible=0, size=(1920, 1080))
+display = Display(visible=0, size=(100, 100))
 display.start()
 
 writer = SummaryWriter("runs/initial")
@@ -33,10 +33,10 @@ image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 1e-5
-beta = 0.2
+lr = 1e-6
+beta = 1e-7
 prediction_loss_term = 0.0
-loss_multiplier = 100.
+loss_multiplier = 1.
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -90,7 +90,7 @@ class TransitionNet(torch.nn.Module):
         return s
 
 def normalize_observation(observation):
-    observation = cv2.resize(observation, (img_size[1], img_size[0]))
+    # observation = cv2.resize(observation, (img_size[1], img_size[0]))
     observation = np.transpose(observation, (2, 1, 0))
     # observation = observation.reshape(image_dimension)
     observation = observation.copy()
