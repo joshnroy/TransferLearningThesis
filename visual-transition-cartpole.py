@@ -27,16 +27,17 @@ first_img = get_first_img()
 img_size = (50, 75)
 batch_size = 100
 state_size = 1000
-rp_size = 5
+rp_size = 500
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
 lr = 1e-6
-beta = 1e-7
-prediction_loss_term = 0.0
+beta = 1e-6
+prediction_loss_term = 0.
 loss_multiplier = 1.
+render_param_loss_term = 0.001
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -112,11 +113,13 @@ def forward_pass(T, image, action, encoder, decoder):
 
     return state, next_state, reconstructed_image, z_mu, z_var
 
-def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, total_loss):
+def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, render_param_loss, total_loss):
     writer.add_scalar("Reconstruction Loss", recon_loss, it)
     writer.add_scalar("Scaled Reconstruction Loss", (1. - prediction_loss_term) * (1. - beta) * recon_loss, it)
     writer.add_scalar("KL Loss", kl_loss, it)
-    writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * beta * kl_loss, it)
+    writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * (1. - render_param_loss_term) * beta * kl_loss, it)
+    writer.add_scalar("RP Loss", render_param_loss, it)
+    writer.add_scalar("Scaled RP Loss", (1. - prediction_loss_term) * render_param_loss_term * render_param_loss, it)
     if prediction_loss is not None:
         writer.add_scalar("Prediction Loss", prediction_loss, it)
         writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
@@ -187,6 +190,7 @@ def main():
 
     # Losses
     predicted_state_loss_f = torch.nn.MSELoss()
+    render_param_loss_f = torch.nn.MSELoss()
     # predicted_state = None
 
     # Main loop
@@ -208,15 +212,23 @@ def main():
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
+            # whitevalmask = torch.ceil(np.ones(input_batch.shape, dtype=np.float32) - input_batch).to(device)
+
             recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
+
+            render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
 
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
             prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action) / batch_size
-            loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
-            write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
+            loss = ((1. - prediction_loss_term) * 
+                        ((1. - render_param_loss_term) * ((1. - beta) * recon_loss + 
+                            beta * kl_loss) + 
+                            render_param_loss_term * render_param_loss) + 
+                    prediction_loss_term * prediction_loss) * loss_multiplier
+            write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, render_param_loss, loss)
 
 
             # if predicted_state is not None:
