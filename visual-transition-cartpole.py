@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import cv2
 from tensorboardX import SummaryWriter
 from cartpole_image_interface import read_next_batch, get_first_img
+import sys
 
 import gym
 import gym_cartpole_visual
@@ -19,7 +20,11 @@ from pyvirtualdisplay import Display
 display = Display(visible=0, size=(100, 100))
 display.start()
 
-writer = SummaryWriter("runs/initial")
+prev_runs = os.listdir("runs/")
+
+test_num = int(max(prev_runs)[4]) + 1
+
+writer = SummaryWriter("runs/test" + str(test_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 first_img = get_first_img()
@@ -34,17 +39,16 @@ action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
 lr = 1e-6
-beta = 1e-6
+beta = 0.5
 prediction_loss_term = 0.
 loss_multiplier = 1.
-render_param_loss_term = 0.001
+render_param_loss_term = 1e-5
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
         self.input_to_hidden = torch.nn.Conv2d(3, 6, 2)
-        self.pool = torch.nn.MaxPool2d(2, 2)
         self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
 
@@ -66,13 +70,11 @@ class DecoderNet(torch.nn.Module):
     def __init__(self):
         super(DecoderNet, self).__init__()
         self.state_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
-        self.unpool = torch.nn.MaxUnpool2d(2, 2)
         self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 2)
     
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
         h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
-        # h_unpooled = self.unpool(h_unflattened)
         X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
@@ -126,10 +128,10 @@ def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, rende
     writer.add_scalar("Total Loss", total_loss, it)
 
 def save_weights(it, encoder, decoder, transition):
-    if it % 1000 == 0:
-        torch.save(encoder, "models/encoder_model_" + str(it) + ".pt")
-        torch.save(decoder, "models/decoder_model_" + str(it) + ".pt")
-        torch.save(transition, "models/transition_model_" + str(it) + ".pt")
+    if it % 10000 == 0:
+        torch.save(encoder, "models/encoder_model_" + str(test_num) + "_" + str(it) + ".pt")
+        torch.save(decoder, "models/decoder_model_" + str(test_num) + "_" + str(it) + ".pt")
+        torch.save(transition, "models/transition_model_" + str(test_num) + "_" + str(it) + ".pt")
 
 
 def pytorch_to_cv(img):
@@ -197,6 +199,7 @@ def main():
     env = gym.make("cartpole-visual-v1")
     step = 0
     for i_episode in range(5000):
+        print(str(step))
         observation = env.reset()
         for t in range(100):
 
@@ -207,18 +210,19 @@ def main():
             extracted_state_with_action = torch.cat((extracted_state, actions), 1)
 
             if t % 50 == 0:
-                cv2.imwrite("pics/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_batch[0]))
-                cv2.imwrite("pics/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image[0]))
+                pics_dir = os.path.dirname("pics" + str(test_num) + "/")
+                if not os.path.exists(pics_dir):
+                    os.makedirs(pics_dir)
+                cv2.imwrite("pics" + str(test_num) + "/"+ str(i_episode) + "_" + str(t) + "original.jpg", pytorch_to_cv(input_batch[0]))
+                cv2.imwrite("pics" + str(test_num) + "/" + str(i_episode) + "_" + str(t) + "reconstructed.jpg", pytorch_to_cv(reconstructed_image[0]))
 
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
-            # whitevalmask = torch.ceil(np.ones(input_batch.shape, dtype=np.float32) - input_batch).to(device)
 
             recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
-
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
@@ -229,17 +233,7 @@ def main():
                             render_param_loss_term * render_param_loss) + 
                     prediction_loss_term * prediction_loss) * loss_multiplier
             write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, render_param_loss, loss)
-
-
-            # if predicted_state is not None:
-            #     predicted_state = next_state[0:49]
-            #     extracted_state_with_action = extracted_state_with_action[1:50]
-            #     prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action)
-            #     loss = ((1. - prediction_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + prediction_loss_term * prediction_loss) * loss_multiplier
-            #     write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, loss)
-            # else:
-            #     loss = ((1. - beta) * recon_loss + beta * kl_loss) * loss_multiplier
-            #     write_to_tensorboard(writer, step, recon_loss, kl_loss, None, loss)
+            writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])))
 
             # Save weights
             save_weights(t, encoder, decoder, T)
@@ -254,8 +248,6 @@ def main():
             #     writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
-
-            print(i_episode, t)
 
             # predicted_state = next_state
     
