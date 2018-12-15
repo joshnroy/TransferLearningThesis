@@ -31,15 +31,15 @@ first_img = get_first_img()
 
 img_size = (50, 75)
 batch_size = 100
-state_size = 1000
-rp_size = 500
+state_size = 20
+rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 1e-6
-beta = 0.5
+lr = 5e-7
+beta = 0.8
 prediction_loss_term = 0.
 loss_multiplier = 1.
 render_param_loss_term = 1e-5
@@ -223,6 +223,7 @@ def main():
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
+            render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
@@ -233,7 +234,7 @@ def main():
                             render_param_loss_term * render_param_loss) + 
                     prediction_loss_term * prediction_loss) * loss_multiplier
             write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, render_param_loss, loss)
-            writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])))
+            writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])), step)
 
             # Save weights
             save_weights(t, encoder, decoder, T)
