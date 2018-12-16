@@ -31,18 +31,19 @@ first_img = get_first_img()
 
 img_size = (50, 75)
 batch_size = 100
-state_size = 20
-rp_size = 5
+state_size = 100
+rp_size = 25
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 5e-7
+lr = 1e-5
+
 beta = 0.8
 prediction_loss_term = 0.
 loss_multiplier = 1.
-render_param_loss_term = 1e-5
+render_param_loss_term = 1e-2
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -53,10 +54,10 @@ class EncoderNet(torch.nn.Module):
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
 
     def forward(self, x):
-        h = self.input_to_hidden(x)
+        h = nn.relu(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
-        mu = self.hidden_to_mu(h_flattened)
-        var = self.hidden_to_var(h_flattened)
+        mu = nn.relu(self.hidden_to_mu(h_flattened))
+        var = nn.relu(self.hidden_to_var(h_flattened))
         return mu, var
 
 # Sample from encoder network
@@ -198,7 +199,7 @@ def main():
     # Main loop
     env = gym.make("cartpole-visual-v1")
     step = 0
-    for i_episode in range(5000):
+    for i_episode in range(10000):
         print(str(step))
         observation = env.reset()
         for t in range(100):
@@ -244,8 +245,9 @@ def main():
 
             # Update
             # adaptive_lr = min((1/(10**(3/13000)))**step if step != 0 else 1., 1e-6)
-            # for g in solver.param_groups:
-            #     g['lr'] = adaptive_lr
+            # if step == 300000:
+            #     for g in solver.param_groups:
+            #         g['lr'] = adaptive_lr
             #     writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
