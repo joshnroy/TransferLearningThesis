@@ -37,11 +37,8 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
-# c = 0
-lr = 1e-4
-beta = 0.3
-prediction_loss_term = 0.
-loss_multiplier = 1.
+
+beta = 0.1
 render_param_loss_term = 0.
 
 # Encoder Network
@@ -75,7 +72,7 @@ class DecoderNet(torch.nn.Module):
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
         h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
-        X = nn.relu(self.hidden_to_reconstructed(h_unflattened))
+        X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
 # Transition Network
@@ -93,9 +90,7 @@ class TransitionNet(torch.nn.Module):
         return s
 
 def normalize_observation(observation):
-    # observation = cv2.resize(observation, (img_size[1], img_size[0]))
     observation = np.transpose(observation, (2, 1, 0))
-    # observation = observation.reshape(image_dimension)
     observation = observation.copy()
     observation = observation / 255.
     assert ((observation >= 0.).all() and (observation <= 1.).all())
@@ -107,24 +102,21 @@ def forward_pass(T, image, action, encoder, decoder):
     z_mu, z_var = encoder(image)
     state = sample_z(z_mu, z_var)
 
-    # Decode image from state
-    reconstructed_image = decoder(state)
-
     # Predict next_state
     next_state = T(torch.cat((state, action), 1))
 
-    return state, next_state, reconstructed_image, z_mu, z_var
+    # Decode image from state
+    reconstructed_next_image = decoder(next_state[0:batch_size, 0:state_size])
 
-def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, render_param_loss, total_loss):
+    return state, next_state, reconstructed_next_image, z_mu, z_var
+
+def write_to_tensorboard(writer, it, recon_loss, kl_loss, render_param_loss, total_loss):
     writer.add_scalar("Reconstruction Loss", recon_loss, it)
-    writer.add_scalar("Scaled Reconstruction Loss", (1. - prediction_loss_term) * (1. - beta) * recon_loss, it)
+    writer.add_scalar("Scaled Reconstruction Loss", (1. - beta) * recon_loss, it)
     writer.add_scalar("KL Loss", kl_loss, it)
-    writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * (1. - render_param_loss_term) * beta * kl_loss, it)
+    writer.add_scalar("Scaled KL Loss", (1. - render_param_loss_term) * beta * kl_loss, it)
     writer.add_scalar("RP Loss", render_param_loss, it)
-    writer.add_scalar("Scaled RP Loss", (1. - prediction_loss_term) * render_param_loss_term * render_param_loss, it)
-    if prediction_loss is not None:
-        writer.add_scalar("Prediction Loss", prediction_loss, it)
-        writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
+    writer.add_scalar("Scaled RP Loss", render_param_loss_term * render_param_loss, it)
     writer.add_scalar("Total Loss", total_loss, it)
 
 def save_weights(it, encoder, decoder, transition):
@@ -146,7 +138,6 @@ def pytorch_to_cv(img):
 def get_batch_and_actions(env, batch_size):
     batch = []
     actions = []
-
 
     for _ in range(batch_size):
         # Take a random action
@@ -170,18 +161,17 @@ def get_batch_and_actions(env, batch_size):
 
 def main():
     # Setup
+    lr = 1e-4
 
     # Make transition Network
     T = TransitionNet().to(device)
     T.train()
 
+    # Make Autoencoder Network
     encoder = EncoderNet().to(device)
     encoder.train()
     decoder = DecoderNet().to(device)
     decoder.train()
-
-    # Make Autoencoder Network
-    # params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]
 
     # Set solver
     params = []
@@ -193,7 +183,6 @@ def main():
     # Losses
     predicted_state_loss_f = torch.nn.MSELoss()
     render_param_loss_f = torch.nn.MSELoss()
-    # predicted_state = None
 
     # Main loop
     env = gym.make("cartpole-visual-v1")
@@ -219,21 +208,13 @@ def main():
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
 
-            recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
+            recon_loss = nn.binary_cross_entropy(reconstructed_image[0:(batch_size-1)], input_batch[1:batch_size])
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
-            # render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
 
-            predicted_state = next_state[0:(batch_size - 1)]
-            extracted_state_with_action = extracted_state_with_action[1:batch_size]
-            prediction_loss = predicted_state_loss_f(predicted_state, extracted_state_with_action) / batch_size
-            loss = ((1. - prediction_loss_term) * 
-                        ((1. - render_param_loss_term) * ((1. - beta) * recon_loss + 
-                            beta * kl_loss) + 
-                            render_param_loss_term * render_param_loss) + 
-                    prediction_loss_term * prediction_loss) * loss_multiplier
-            write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, render_param_loss, loss)
+            loss = (1. - render_param_loss_term) * (beta * kl_loss + (1. - beta) * recon_loss) + render_param_loss_term * render_param_loss
+            write_to_tensorboard(writer, step, recon_loss, kl_loss, render_param_loss, loss)
             writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])), step)
 
             # Save weights
@@ -242,15 +223,15 @@ def main():
             # Backward pass
             loss.backward(retain_graph=True)
 
-            # Update
-            adaptive_lr = lr if recon_loss > 0.2 else 1e-6
+            # Change Learning Rate
+            lr = lr if recon_loss > 0.2 else 1e-5
             for g in solver.param_groups:
-                g['lr'] = adaptive_lr
-                writer.add_scalar("Learning Rate", adaptive_lr, step)
+                g['lr'] = lr
+                writer.add_scalar("Learning Rate", lr, step)
+
+            # Update
             solver.step()
             step += 1
-
-            # predicted_state = next_state
     
 
 if __name__ == "__main__":
