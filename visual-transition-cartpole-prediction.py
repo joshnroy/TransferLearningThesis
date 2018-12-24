@@ -80,13 +80,13 @@ class TransitionNet(torch.nn.Module):
     def __init__(self):
         super(TransitionNet, self).__init__()
         self.fc1 = torch.nn.Linear(state_size + action_size, state_size + action_size)
-        self.fc2 = torch.nn.Linear(state_size + action_size, 100)
-        self.fc3 = torch.nn.Linear(100, state_size + action_size)
+        self.fc2 = torch.nn.Linear(state_size + action_size, state_size + action_size)
+        self.fc3 = torch.nn.Linear(state_size + action_size, state_size + action_size)
 
     def forward(self, s):
         s = nn.relu(self.fc1(s))
         s = nn.relu(self.fc2(s))
-        s = self.fc3(s)
+        s = nn.relu(self.fc3(s))
         return s
 
 def normalize_observation(observation):
