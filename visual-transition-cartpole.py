@@ -31,18 +31,18 @@ first_img = get_first_img()
 
 img_size = (50, 75)
 batch_size = 100
-state_size = 20
-rp_size = 5
+state_size = 1000
+rp_size = 250
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 5e-7
-beta = 0.8
+lr = 1e-4
+beta = 0.3
 prediction_loss_term = 0.
 loss_multiplier = 1.
-render_param_loss_term = 1e-5
+render_param_loss_term = 1e-3
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -53,10 +53,10 @@ class EncoderNet(torch.nn.Module):
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
 
     def forward(self, x):
-        h = self.input_to_hidden(x)
+        h = nn.relu(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
-        mu = self.hidden_to_mu(h_flattened)
-        var = self.hidden_to_var(h_flattened)
+        mu = nn.relu(self.hidden_to_mu(h_flattened))
+        var = nn.relu(self.hidden_to_var(h_flattened))
         return mu, var
 
 # Sample from encoder network
@@ -223,7 +223,7 @@ def main():
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
-            render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
+            # render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
@@ -243,10 +243,10 @@ def main():
             loss.backward(retain_graph=True)
 
             # Update
-            # adaptive_lr = min((1/(10**(3/13000)))**step if step != 0 else 1., 1e-6)
-            # for g in solver.param_groups:
-            #     g['lr'] = adaptive_lr
-            #     writer.add_scalar("Learning Rate", adaptive_lr, step)
+            adaptive_lr = lr if recon_loss > 0.2 else 1e-4
+            for g in solver.param_groups:
+                g['lr'] = adaptive_lr
+                writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
 
