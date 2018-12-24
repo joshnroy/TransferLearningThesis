@@ -42,7 +42,7 @@ lr = 1e-4
 beta = 0.3
 prediction_loss_term = 0.
 loss_multiplier = 1.
-render_param_loss_term = 1e-3
+render_param_loss_term = 0.
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -53,7 +53,7 @@ class EncoderNet(torch.nn.Module):
         self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
 
     def forward(self, x):
-        h = nn.relu(self.input_to_hidden(x))
+        h = torch.sigmoid(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
         mu = nn.relu(self.hidden_to_mu(h_flattened))
         var = nn.relu(self.hidden_to_var(h_flattened))
@@ -243,7 +243,7 @@ def main():
             loss.backward(retain_graph=True)
 
             # Update
-            adaptive_lr = lr if recon_loss > 0.2 else 1e-4
+            adaptive_lr = lr if recon_loss > 0.2 else 1e-6
             for g in solver.param_groups:
                 g['lr'] = adaptive_lr
                 writer.add_scalar("Learning Rate", adaptive_lr, step)
