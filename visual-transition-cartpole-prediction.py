@@ -39,7 +39,7 @@ action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 
 beta = 0.1
-render_param_loss_term = 0.
+render_param_loss_term = 1e-5
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
@@ -128,7 +128,6 @@ def save_weights(it, encoder, decoder, transition):
 
 def pytorch_to_cv(img):
     input_numpy = img.detach().cpu().numpy()
-    # input_reshaped = input_numpy.reshape(img_size[0], img_size[1], 3)
     input_numpy = np.transpose(input_numpy, (2, 1, 0))
     input_numpy = np.round(input_numpy * 255.)
     input_numpy = input_numpy.astype(int)
@@ -181,7 +180,6 @@ def main():
     solver = optim.Adam(params, lr=lr)
 
     # Losses
-    predicted_state_loss_f = torch.nn.MSELoss()
     render_param_loss_f = torch.nn.MSELoss()
 
     # Main loop
@@ -224,7 +222,9 @@ def main():
             loss.backward(retain_graph=True)
 
             # Change Learning Rate
-            lr = lr if recon_loss > 0.2 else 1e-5
+            lr = lr if recon_loss > 0.2 else 1e-6
+            if step > 2000:
+                lr = 1e-7
             for g in solver.param_groups:
                 g['lr'] = lr
                 writer.add_scalar("Learning Rate", lr, step)
