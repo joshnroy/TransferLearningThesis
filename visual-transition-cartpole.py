@@ -38,9 +38,9 @@ image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
 # c = 0
-lr = 1e-4
-beta = 0.3
-prediction_loss_term = 0.
+lr = 1e-3
+beta = 0.1
+prediction_loss_term = 0.1
 loss_multiplier = 1.
 render_param_loss_term = 0.
 
@@ -55,8 +55,8 @@ class EncoderNet(torch.nn.Module):
     def forward(self, x):
         h = nn.relu(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
-        mu = nn.relu(self.hidden_to_mu(h_flattened))
-        var = nn.relu(self.hidden_to_var(h_flattened))
+        mu = self.hidden_to_mu(h_flattened)
+        var = self.hidden_to_var(h_flattened)
         return mu, var
 
 # Sample from encoder network
@@ -75,7 +75,7 @@ class DecoderNet(torch.nn.Module):
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
         h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
-        X = nn.relu(self.hidden_to_reconstructed(h_unflattened))
+        X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
 # Transition Network
@@ -175,13 +175,11 @@ def main():
     T = TransitionNet().to(device)
     T.train()
 
+    # Make Autoencoder Network
     encoder = EncoderNet().to(device)
     encoder.train()
     decoder = DecoderNet().to(device)
     decoder.train()
-
-    # Make Autoencoder Network
-    # params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]
 
     # Set solver
     params = []
@@ -203,6 +201,9 @@ def main():
         observation = env.reset()
         for t in range(100):
 
+            # Solver setup
+            solver.zero_grad()
+
             input_batch, actions = get_batch_and_actions(env, batch_size)
 
             # Forward pass of the network
@@ -223,7 +224,6 @@ def main():
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
-            # render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
@@ -242,15 +242,15 @@ def main():
             # Backward pass
             loss.backward(retain_graph=True)
 
+            # Adaptive LR
+            # adaptive_lr = lr if recon_loss > 0.2 else 1e-6
+            # for g in solver.param_groups:
+            #     g['lr'] = adaptive_lr
+            #     writer.add_scalar("Learning Rate", adaptive_lr, step)
+
             # Update
-            adaptive_lr = lr if recon_loss > 0.2 else 1e-6
-            for g in solver.param_groups:
-                g['lr'] = adaptive_lr
-                writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
-
-            # predicted_state = next_state
     
 
 if __name__ == "__main__":
