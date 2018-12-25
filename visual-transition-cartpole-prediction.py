@@ -37,6 +37,7 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
+transition_hidden_dimension = 2000
 
 beta = 0.1
 render_param_loss_term = 1e-5
@@ -79,9 +80,9 @@ class DecoderNet(torch.nn.Module):
 class TransitionNet(torch.nn.Module):
     def __init__(self):
         super(TransitionNet, self).__init__()
-        self.fc1 = torch.nn.Linear(state_size + action_size, state_size + action_size)
-        self.fc2 = torch.nn.Linear(state_size + action_size, state_size + action_size)
-        self.fc3 = torch.nn.Linear(state_size + action_size, state_size + action_size)
+        self.fc1 = torch.nn.Linear(state_size + action_size, transition_hidden_dimension)
+        self.fc2 = torch.nn.Linear(transition_hidden_dimension, transition_hidden_dimension)
+        self.fc3 = torch.nn.Linear(transition_hidden_dimension, state_size + action_size)
 
     def forward(self, s):
         s = nn.relu(self.fc1(s))
@@ -124,7 +125,6 @@ def save_weights(it, encoder, decoder, transition):
         torch.save(encoder, "models/encoder_model_" + str(test_num) + "_" + str(it) + ".pt")
         torch.save(decoder, "models/decoder_model_" + str(test_num) + "_" + str(it) + ".pt")
         torch.save(transition, "models/transition_model_" + str(test_num) + "_" + str(it) + ".pt")
-
 
 def pytorch_to_cv(img):
     input_numpy = img.detach().cpu().numpy()
@@ -222,7 +222,7 @@ def main():
             loss.backward(retain_graph=True)
 
             # Change Learning Rate
-            lr = lr if recon_loss > 0.2 else 1e-6
+            lr = lr if recon_loss > 0.2 else 1e-5
             if step > 2000:
                 lr = 1e-7
             for g in solver.param_groups:
