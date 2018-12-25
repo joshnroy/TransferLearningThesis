@@ -37,24 +37,27 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 hidden_dimension = 6 * 74 * 49
-transition_hidden_dimension = 2000
+transition_hidden_dimension = 1000
+hidden2_dim = 1000
 
 beta = 0.1
-render_param_loss_term = 1e-5
+render_param_loss_term = 0.
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
         self.input_to_hidden = torch.nn.Conv2d(3, 6, 2)
-        self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
-        self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
+        self.hidden_to_hidden = torch.nn.Linear(hidden_dimension, hidden2_dim)
+        self.hidden_to_mu = torch.nn.Linear(hidden2_dim, state_size)
+        self.hidden_to_var = torch.nn.Linear(hidden2_dim, state_size)
 
     def forward(self, x):
         h = nn.relu(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
-        mu = nn.relu(self.hidden_to_mu(h_flattened))
-        var = nn.relu(self.hidden_to_var(h_flattened))
+        h_hiddened = nn.relu(self.hidden_to_hidden(h_flattened))
+        mu = self.hidden_to_mu(h_hiddened)
+        var = self.hidden_to_var(h_hiddened)
         return mu, var
 
 # Sample from encoder network
@@ -67,12 +70,14 @@ def sample_z(mu, log_var):
 class DecoderNet(torch.nn.Module):
     def __init__(self):
         super(DecoderNet, self).__init__()
-        self.state_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
+        self.state_to_hidden = torch.nn.Linear(state_size, hidden2_dim)
+        self.hidden_to_hidden = torch.nn.Linear(hidden2_dim, hidden_dimension)
         self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 2)
     
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
-        h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
+        h_hiddened = nn.relu(self.hidden_to_hidden(h))
+        h_unflattened = torch.reshape(h_hiddened, (batch_size, 6, 74, 49))
         X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
@@ -190,6 +195,9 @@ def main():
         observation = env.reset()
         for t in range(100):
 
+            # Optimizer
+            solver.zero_grad()
+
             input_batch, actions = get_batch_and_actions(env, batch_size)
 
             # Forward pass of the network
@@ -206,7 +214,8 @@ def main():
             # Compute Loss
             assert ((reconstructed_image >= 0.).all() and (reconstructed_image <= 1.).all())
 
-            recon_loss = nn.binary_cross_entropy(reconstructed_image[0:(batch_size-1)], input_batch[1:batch_size])
+            recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
+            # recon_loss = nn.binary_cross_entropy(reconstructed_image[0:(batch_size-1)], input_batch[1:batch_size])
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
             render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
@@ -222,12 +231,12 @@ def main():
             loss.backward(retain_graph=True)
 
             # Change Learning Rate
-            lr = lr if recon_loss > 0.2 else 1e-5
-            if step > 2000:
-                lr = 1e-7
-            for g in solver.param_groups:
-                g['lr'] = lr
-                writer.add_scalar("Learning Rate", lr, step)
+            # lr = lr if recon_loss > 0.2 else 1e-5
+            # if step > 2000:
+            #     lr = 1e-7
+            # for g in solver.param_groups:
+            #     g['lr'] = lr
+            #     writer.add_scalar("Learning Rate", lr, step)
 
             # Update
             solver.step()
