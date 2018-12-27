@@ -56,9 +56,6 @@ class autoencoder(nn.Module):
             nn.MaxPool2d(2, stride=1) # b, 8, 2, 2
         )
 
-        self.to_mu = nn.Linear() # Fill in size
-        self.to_logvar = nn.Linear() # Fill in size
-
         self.decoder = nn.Sequential(
                         nn.ConvTranspose2d(8, 16, 3, stride=2),  # b, 16, 5, 5
             nn.ReLU(True),
@@ -75,14 +72,9 @@ class autoencoder(nn.Module):
     def forward (self, x):
         # Encode
         x = self.encoder(x)
-        mu = self.to_mu(x)
-        logvar = self.to_logvar(x)
-
-        # Sample
-        z = self.reparameterize(mu, logvar)
         
         # Decode
-        x = self.decoder(z)
+        x = self.decoder(x)
         return x
 
 def normalize_observation(observation):
@@ -116,7 +108,6 @@ def save_weights(it, encoder, decoder, transition):
 
 def pytorch_to_cv(img):
     input_numpy = img.detach().cpu().numpy()
-    # input_reshaped = input_numpy.reshape(img_size[0], img_size[1], 3)
     input_numpy = np.transpose(input_numpy, (2, 1, 0))
     input_numpy = np.round(input_numpy * 255.)
     input_numpy = input_numpy.astype(int)
