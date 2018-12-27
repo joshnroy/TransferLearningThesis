@@ -65,10 +65,6 @@ class autoencoder(nn.Module):
             nn.Tanh()
         )
 
-    def reparameterize(self, mu, logvar):
-        eps = Variable(torch.randn(batch_size, state_size)).to(device)
-        return mu + torch.exp(logvar / 2) * eps
-
     def forward (self, x):
         # Encode
         x = self.encoder(x)
