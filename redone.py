@@ -24,12 +24,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
 batch_size = 100
-state_size = 1000
-rp_size = 10
+state_size = 10
+rp_size = 5
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
-hidden_dimension = 3 * 73 * 49
 
 beta = 0.1
 prediction_loss_term = 0.
@@ -45,7 +44,17 @@ class autoencoder(nn.Module):
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 16, 5, 5
             nn.Conv2d(16, 8, 3, stride=2, padding=1), # b, 8, 3, 3
             nn.ReLU(True),
-            nn.MaxPool2d(2, stride=1) # b, 8, 2, 2
+            nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
+        )
+
+        self.linear_encoder = nn.Sequential(
+            nn.Linear(8 * 2 * 2, state_size), # b, state_size
+            nn.ReLU(True)
+        )
+
+        self.linear_decoder = nn.Sequential(
+            nn.Linear(state_size, 8 * 2 * 2), # b, 8, 2, 2
+            nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
@@ -60,9 +69,13 @@ class autoencoder(nn.Module):
     def forward (self, x):
         # Encode
         state = self.encoder(x)
+        state = state.reshape(100, 8 * 2 * 2)
+        state = self.linear_encoder(state)
         
         # Decode
-        recon = self.decoder(state)
+        recon = self.linear_decoder(state)
+        recon = recon.reshape(100, 8, 2, 2)
+        recon = self.decoder(recon)
         return state, recon
 
 def normalize_observation(observation):
@@ -112,6 +125,7 @@ def get_batch(batch_size):
             yield observations, actions
             i += batch_size
         data_iter += 500
+    yield None
 
 def main():
     # Setup
@@ -130,24 +144,31 @@ def main():
 
     # Main loop
     step = 0
-    for i_episode in range(5000):
-        print(str(step))
+    epoch = 0
+    while epoch < 10:
+        print("epoch, step", epoch, step)
         # Solver setup
         solver.zero_grad()
 
-        observations, actions = next(batcher)
+        batch = next(batcher)
+        if batch is None:
+            epoch += 1
+            batcher = get_batch(batch_size)
+            batch = next(batcher)
+        
+        observations, actions = batch
         observations = normalize_observation(observations).astype(np.float32)
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
         extracted_state, reconstructed_images = ae(observations)
 
-        if i_episode % 50 == 0:
+        if step % 50 == 0:
             pics_dir = os.path.dirname("pics" + str(test_num) + "/")
             if not os.path.exists(pics_dir):
                 os.makedirs(pics_dir)
-            cv2.imwrite("pics" + str(test_num) + "/"+ str(i_episode) + "original.jpg", pytorch_to_cv(observations[0]))
-            cv2.imwrite("pics" + str(test_num) + "/" + str(i_episode) + "reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
+            cv2.imwrite("pics" + str(test_num) + "/"+ str(step) + "original.jpg", pytorch_to_cv(observations[0]))
+            cv2.imwrite("pics" + str(test_num) + "/" + str(step) + "reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
 
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
@@ -170,6 +191,10 @@ def main():
         loss.backward()
 
         # Adaptive LR
+        # lr = lr if recon_loss > 0.15 else 1e-4
+        # for g in solver.param_groups:
+        #     g['lr'] = lr
+        #     writer.add_scalar("Learning Rate", lr, step)
 
         # Update
         solver.step()
