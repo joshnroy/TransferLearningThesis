@@ -114,9 +114,9 @@ def pytorch_to_cv(img):
 
     return input_numpy
 
-def get_batch(batch_size):
-    data_iter = 500
-    while data_iter <= 1000:
+def get_batch(starting_batch, ending_batch, batch_size):
+    data_iter = starting_batch
+    while data_iter <= ending_batch:
         data = np.load("training_data/training_data_" + str(data_iter) + ".npy")
         i = 0
         while i + batch_size < data.shape[0]:
@@ -130,7 +130,9 @@ def get_batch(batch_size):
 def main():
     # Setup
     lr = 1e-3
-    batcher = get_batch(batch_size)
+    batcher_original = get_batch(500, 1000, batch_size)
+    batcher_new = get_batch(1500, 2000, batch_size)
+    current_batcher = "original"
 
     # Make transition Network
     ae = autoencoder().to(device)
@@ -145,16 +147,26 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    while epoch < 10:
-        print("epoch, step", epoch, step)
+    while epoch < 30:
         # Solver setup
         solver.zero_grad()
 
-        batch = next(batcher)
-        if batch is None:
-            epoch += 1
-            batcher = get_batch(batch_size)
-            batch = next(batcher)
+        if current_batcher == "original":
+            batch = next(batcher_original)
+            if batch is None:
+                epoch += 1
+                batcher_original = get_batch(500, 1000, batch_size)
+                batch = next(batcher_original)
+                current_batcher = "new"
+                print(epoch, current_batcher)
+        elif current_batcher == "new":
+            batch = next(batcher_new)
+            if batch is None:
+                epoch += 1
+                batcher_new = get_batch(1500, 2000, batch_size)
+                batch = next(batcher_new)
+                current_batcher = "original"
+                print(epoch, current_batcher)
         
         observations, actions = batch
         observations = normalize_observation(observations).astype(np.float32)

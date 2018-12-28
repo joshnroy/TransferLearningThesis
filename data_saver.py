@@ -9,7 +9,7 @@ display = Display(visible=0, size=(100, 100))
 display.start()
 
 array = []
-for i_episode in range(0, 1001):
+for i_episode in range(1001, 2001):
     env = gym.make("cartpole-visual-v1")
     observation = env.reset()
     for t in range(100):
