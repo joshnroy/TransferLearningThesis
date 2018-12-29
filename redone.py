@@ -24,15 +24,14 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
 batch_size = 100
-state_size = 10
-rp_size = 5
+state_size = 5
+rp_size = 2
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 beta = 0.1
 prediction_loss_term = 0.
-render_param_loss_term = 0.
 
 # Network
 class autoencoder(nn.Module):
@@ -91,9 +90,9 @@ def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, rende
     writer.add_scalar("Reconstruction Loss", recon_loss, it)
     writer.add_scalar("Scaled Reconstruction Loss", (1. - prediction_loss_term) * (1. - beta) * recon_loss, it)
     writer.add_scalar("KL Loss", kl_loss, it)
-    writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * (1. - render_param_loss_term) * beta * kl_loss, it)
+    # writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * (1. - render_param_loss_term) * beta * kl_loss, it)
     writer.add_scalar("RP Loss", render_param_loss, it)
-    writer.add_scalar("Scaled RP Loss", (1. - prediction_loss_term) * render_param_loss_term * render_param_loss, it)
+    # writer.add_scalar("Scaled RP Loss", (1. - prediction_loss_term) * render_param_loss_term * render_param_loss, it)
     if prediction_loss is not None:
         writer.add_scalar("Prediction Loss", prediction_loss, it)
         writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
@@ -129,7 +128,8 @@ def get_batch(starting_batch, ending_batch, batch_size):
 
 def main():
     # Setup
-    lr = 1e-3
+    lr = 1e-2
+    render_param_loss_term = 0.
     batcher_original = get_batch(500, 1000, batch_size)
     batcher_new = get_batch(1500, 2000, batch_size)
     current_batcher = "original"
@@ -147,9 +147,12 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    while epoch < 30:
+    while epoch < 50:
         # Solver setup
         solver.zero_grad()
+
+        if epoch > 20:
+            render_param_loss_term = 1e-3
 
         if current_batcher == "original":
             batch = next(batcher_original)
