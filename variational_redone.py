@@ -24,13 +24,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
 batch_size = 100
-state_size = 5
+state_size = 10
 rp_size = 3
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
-beta = 0.1
+beta = 1e-3
 prediction_loss_term = 0.
 
 # Network
@@ -46,7 +46,12 @@ class autoencoder(nn.Module):
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
-        self.linear_encoder = nn.Sequential(
+        self.linear_encoder_mu = nn.Sequential(
+            nn.Linear(8 * 2 * 2, state_size), # b, state_size
+            nn.ReLU(True)
+        )
+
+        self.linear_encoder_sigma = nn.Sequential(
             nn.Linear(8 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
@@ -65,17 +70,26 @@ class autoencoder(nn.Module):
             nn.Sigmoid()
         )
 
+    # Sample from encoder network
+    def sample_z(self, mu, log_var):
+        # Using reparameterization trick to sample from a gaussian
+        eps = Variable(torch.randn(batch_size, state_size)).to(device)
+        return mu + torch.exp(log_var / 2) * eps
+
     def forward (self, x):
         # Encode
-        state = self.encoder(x)
-        state = state.reshape(100, 8 * 2 * 2)
-        state = self.linear_encoder(state)
+        conved = self.encoder(x)
+        conved = conved.reshape(100, 8 * 2 * 2)
+        mu = self.linear_encoder_mu(conved)
+        sigma = self.linear_encoder_sigma(conved)
+
+        state = self.sample_z(mu, sigma)
         
         # Decode
         recon = self.linear_decoder(state)
         recon = recon.reshape(100, 8, 2, 2)
         recon = self.decoder(recon)
-        return state, recon
+        return state, recon, mu, sigma
 
 def normalize_observation(observation):
     observation = observation.reshape(batch_size, img_size[0], img_size[1], 3)
@@ -93,9 +107,9 @@ def write_to_tensorboard(writer, it, recon_loss, kl_loss, prediction_loss, rende
     # writer.add_scalar("Scaled KL Loss", (1. - prediction_loss_term) * (1. - render_param_loss_term) * beta * kl_loss, it)
     writer.add_scalar("RP Loss", render_param_loss, it)
     # writer.add_scalar("Scaled RP Loss", (1. - prediction_loss_term) * render_param_loss_term * render_param_loss, it)
-    if prediction_loss is not None:
-        writer.add_scalar("Prediction Loss", prediction_loss, it)
-        writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
+    # if prediction_loss is not None:
+    #     writer.add_scalar("Prediction Loss", prediction_loss, it)
+    #     writer.add_scalar("Scaled Prediction Loss", prediction_loss_term * prediction_loss, it)
     writer.add_scalar("Total Loss", total_loss, it)
 
 def save_weights(it, encoder, decoder, transition):
@@ -150,7 +164,7 @@ def main():
     while True:
         # Solver setup
         solver.zero_grad()
-        print(step)
+        # print(step)
 
         # if epoch > 20:
         #     render_param_loss_term = 1e-3
@@ -177,7 +191,7 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        extracted_state, reconstructed_images = ae(observations)
+        extracted_state, reconstructed_images, z_mu, z_var = ae(observations)
 
         if step % 50 == 0:
             pics_dir = os.path.dirname("pics" + str(test_num) + "/")
@@ -190,14 +204,14 @@ def main():
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
         recon_loss = F.binary_cross_entropy(reconstructed_images, observations)
-        # kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var) TODO: May need to make network variational later
+        kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
         render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
 
-        loss = (1. - render_param_loss_term) * recon_loss + render_param_loss_term * render_param_loss
+        loss = (1. - render_param_loss_term) * ((1. - beta) * recon_loss + beta * kl_loss) + render_param_loss_term * render_param_loss
 
         # Tensorboard
-        write_to_tensorboard(writer, step, recon_loss, 0., 0., render_param_loss, loss)
+        write_to_tensorboard(writer, step, recon_loss, kl_loss, 0., render_param_loss, loss)
         writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])), step)
 
         # Save weights
@@ -207,7 +221,7 @@ def main():
         loss.backward()
 
         # Adaptive LR
-        # lr = lr if recon_loss > 0.15 else 1e-4
+        # lr = lr if recon_loss > 0.12 else 1e-3
         # for g in solver.param_groups:
         #     g['lr'] = lr
         #     writer.add_scalar("Learning Rate", lr, step)
