@@ -25,7 +25,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 img_size = (45, 80)
 batch_size = 100
 state_size = 5
-rp_size = 5
+rp_size = 32
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
@@ -38,38 +38,44 @@ class RPencoder(nn.Module):
     def __init__(self):
         super(RPencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, (4, 3), stride=(4, 3)), # b, 16, 20, 15
+            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 100, 20, 15
             nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 16, 5, 5
-            nn.Conv2d(16, 8, 3, stride=2, padding=1), # b, 8, 3, 3
+            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 100, 5, 5
+            nn.Conv2d(100, 50, 3, stride=2, padding=1), # b, 50, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(8 * 2 * 2, state_size), # b, state_size
+            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
         self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(8 * 2 * 2, state_size), # b, state_size
+            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
+            nn.ReLU(True)
+        )
+
+        self.linear_encoder = nn.Sequential(
+            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
     # Sample from encoder network
     def sample_z(self, mu, log_var):
         # Using reparameterization trick to sample from a gaussian
-        eps = Variable(torch.randn(batch_size, state_size)).to(device)
+        eps = Variable(torch.randn(batch_size, rp_size)).to(device)
         return mu + torch.exp(log_var / 2) * eps
 
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 8 * 2 * 2)
+        conved = conved.reshape(100, 50 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
-        render_params = self.sample_z(mu, sigma)
+        render_params = self.linear_encoder(conved)
+        # render_params = self.sample_z(mu, sigma)
 
         return render_params, mu, sigma
 
@@ -77,26 +83,21 @@ class Sencoder(nn.Module):
     def __init__(self):
         super(Sencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, (4, 3), stride=(4, 3)), # b, 16, 20, 15
+            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 100, 20, 15
             nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 16, 5, 5
-            nn.Conv2d(16, 8, 3, stride=2, padding=1), # b, 8, 3, 3
+            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 100, 5, 5
+            nn.Conv2d(100, 50, 3, stride=2, padding=1), # b, 50, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(8 * 2 * 2, rp_size), # b, rp_size
+            nn.Linear(50 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
 
         self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(8 * 2 * 2, rp_size), # b, rp_size
-            nn.ReLU(True)
-        )
-
-        self.linear_decoder = nn.Sequential(
-            nn.Linear(rp_size, 8 * 2 * 2), # b, 8, 2, 2
+            nn.Linear(50 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
 
@@ -109,7 +110,7 @@ class Sencoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 8 * 2 * 2)
+        conved = conved.reshape(100, 50 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
@@ -122,23 +123,23 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 8 * 2 * 2), # b, 8, 2, 2
+            nn.Linear(state_size + rp_size, 50 * 2 * 2), # b, 50, 2, 2
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(8, 16, 3, stride=2), # b, 16, 5, 5
+            nn.ConvTranspose2d(50, 100, 3, stride=2), # b, 100, 5, 5
             nn.ReLU(True),
-            nn.ConvTranspose2d(16, 8, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 8, 20, 15
+            nn.ConvTranspose2d(100, 50, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 50, 20, 15
             nn.ReLU(True),
-            nn.ConvTranspose2d(8, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
+            nn.ConvTranspose2d(50, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(100, 8, 2, 2)
+        recon = recon.reshape(100, 50, 2, 2)
         recon = self.decoder(recon)
         return recon
 
@@ -198,8 +199,8 @@ def main():
     # Setup
     lr = 1e-2
     render_param_loss_term = 1e-3
-    RPbatcher = get_batch(500, 1000, batch_size)
-    Sbatcher = get_batch(1500, 2000, batch_size)
+    RPbatcher = get_batch(2050, 2100, batch_size)
+    Sbatcher = get_batch(500, 1000, batch_size)
     current_batcher = "renderparams"
 
     # Make Networks objects
@@ -220,6 +221,7 @@ def main():
     step = 0
     epoch = 0
     while True:
+        print(step, current_batcher)
         # Solver setup
         RPsolver.zero_grad()
         Ssolver.zero_grad()
@@ -228,10 +230,10 @@ def main():
             batch = next(RPbatcher)
             if batch is None:
                 epoch += 1
-                RPbatcher = get_batch(2000, 2500, batch_size)
+                RPbatcher = get_batch(2050, 2100, batch_size)
                 batch = next(RPbatcher)
-                current_batcher = "state"
-                print(epoch, current_batcher)
+                # current_batcher = "state"
+                # print(epoch, current_batcher)
         elif current_batcher == "state":
             batch = next(Sbatcher)
             if batch is None:
@@ -248,7 +250,7 @@ def main():
         # Forward pass of the network
         render_params, rp_mu, rp_sigma = RPen(observations)
         state, s_mu, s_sigma = Sen(observations)
-        encoded = torch.cat((render_params, state), 0)
+        encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
         if step % 50 == 0:
@@ -264,7 +266,8 @@ def main():
         recon_loss = F.binary_cross_entropy(reconstructed_images, observations)
         kl_loss = 0.5 * torch.sum(torch.exp(rp_sigma) + rp_mu ** 2 - 1. - rp_sigma) if current_batcher == "renderparams" else 0.5 * torch.sum(torch.exp(s_sigma) + s_mu ** 2 - 1. - s_sigma)
 
-        loss = (1. - beta) * recon_loss + beta * kl_loss
+        # loss = (1. - beta) * recon_loss + beta * kl_loss
+        loss = recon_loss
 
         # Tensorboard
         write_to_tensorboard(writer, loss, recon_loss, kl_loss, current_batcher, step)
