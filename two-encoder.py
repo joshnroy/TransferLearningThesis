@@ -25,7 +25,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 img_size = (45, 80)
 batch_size = 100
 state_size = 5
-rp_size = 32
+rp_size = 50
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
@@ -38,26 +38,26 @@ class RPencoder(nn.Module):
     def __init__(self):
         super(RPencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 100, 20, 15
+            nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 100, 5, 5
-            nn.Conv2d(100, 50, 3, stride=2, padding=1), # b, 50, 3, 3
+            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
+            nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
+            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
         self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
+            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
         self.linear_encoder = nn.Sequential(
-            nn.Linear(50 * 2 * 2, rp_size), # b, rp_size
+            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
@@ -70,7 +70,7 @@ class RPencoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 50 * 2 * 2)
+        conved = conved.reshape(100, 100 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
@@ -83,21 +83,26 @@ class Sencoder(nn.Module):
     def __init__(self):
         super(Sencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 100, 20, 15
+            nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 100, 5, 5
-            nn.Conv2d(100, 50, 3, stride=2, padding=1), # b, 50, 3, 3
+            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
+            nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(50 * 2 * 2, state_size), # b, state_size
+            nn.Linear(100 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
 
         self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(50 * 2 * 2, state_size), # b, state_size
+            nn.Linear(100 * 2 * 2, state_size), # b, state_size
+            nn.ReLU(True)
+        )
+
+        self.linear_encoder = nn.Sequential(
+            nn.Linear(100 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
 
@@ -110,11 +115,12 @@ class Sencoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 50 * 2 * 2)
+        conved = conved.reshape(100, 100 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
-        state = self.sample_z(mu, sigma)
+        state = self.linear_encoder(conved)
+        # state = self.sample_z(mu, sigma)
 
         return state, mu, sigma
 
@@ -123,23 +129,23 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 50 * 2 * 2), # b, 50, 2, 2
+            nn.Linear(state_size + rp_size, 100 * 2 * 2), # b, 100, 2, 2
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(50, 100, 3, stride=2), # b, 100, 5, 5
+            nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
             nn.ReLU(True),
-            nn.ConvTranspose2d(100, 50, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 50, 20, 15
+            nn.ConvTranspose2d(200, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
-            nn.ConvTranspose2d(50, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
+            nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(100, 50, 2, 2)
+        recon = recon.reshape(100, 100, 2, 2)
         recon = self.decoder(recon)
         return recon
 
@@ -221,7 +227,6 @@ def main():
     step = 0
     epoch = 0
     while True:
-        print(step, current_batcher)
         # Solver setup
         RPsolver.zero_grad()
         Ssolver.zero_grad()
@@ -232,8 +237,9 @@ def main():
                 epoch += 1
                 RPbatcher = get_batch(2050, 2100, batch_size)
                 batch = next(RPbatcher)
-                # current_batcher = "state"
-                # print(epoch, current_batcher)
+                if epoch > 50:
+                    current_batcher = "state"
+                print(epoch, current_batcher)
         elif current_batcher == "state":
             batch = next(Sbatcher)
             if batch is None:
@@ -264,13 +270,13 @@ def main():
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
         recon_loss = F.binary_cross_entropy(reconstructed_images, observations)
-        kl_loss = 0.5 * torch.sum(torch.exp(rp_sigma) + rp_mu ** 2 - 1. - rp_sigma) if current_batcher == "renderparams" else 0.5 * torch.sum(torch.exp(s_sigma) + s_mu ** 2 - 1. - s_sigma)
+        # kl_loss = 0.5 * torch.sum(torch.exp(rp_sigma) + rp_mu ** 2 - 1. - rp_sigma) if current_batcher == "renderparams" else 0.5 * torch.sum(torch.exp(s_sigma) + s_mu ** 2 - 1. - s_sigma)
 
         # loss = (1. - beta) * recon_loss + beta * kl_loss
         loss = recon_loss
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, recon_loss, kl_loss, current_batcher, step)
+        write_to_tensorboard(writer, loss, recon_loss, 0., current_batcher, step)
         # Save weights
         # TODO: Save when we care about this
 
