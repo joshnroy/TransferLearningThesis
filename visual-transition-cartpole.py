@@ -31,33 +31,33 @@ first_img = get_first_img()
 
 img_size = (50, 75)
 batch_size = 100
-state_size = 100
-rp_size = 25
+state_size = 1000
+rp_size = 10
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
-hidden_dimension = 6 * 74 * 49
-# c = 0
-lr = 1e-5
+hidden_dimension = 3 * 73 * 49
 
-beta = 0.8
+beta = 0.1
 prediction_loss_term = 0.
-loss_multiplier = 1.
-render_param_loss_term = 1e-2
+render_param_loss_term = 0.
 
 # Encoder Network
 class EncoderNet(torch.nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
-        self.input_to_hidden = torch.nn.Conv2d(3, 6, 2)
-        self.hidden_to_mu = torch.nn.Linear(hidden_dimension, state_size)
-        self.hidden_to_var = torch.nn.Linear(hidden_dimension, state_size)
+        self.input_to_hidden = torch.nn.Conv2d(3, 3, (3, 2))
+        # self.max_pool = torch.nn.MaxPool2d(2)
+        self.hidden_to_hidden = torch.nn.Linear(hidden_dimension, 1000)
+        self.hidden_to_mu = torch.nn.Linear(1000, state_size)
+        self.hidden_to_var = torch.nn.Linear(1000, state_size)
 
     def forward(self, x):
         h = nn.relu(self.input_to_hidden(x))
         h_flattened = torch.reshape(h, (batch_size, hidden_dimension))
-        mu = nn.relu(self.hidden_to_mu(h_flattened))
-        var = nn.relu(self.hidden_to_var(h_flattened))
+        h_hidden = nn.relu(self.hidden_to_hidden(h_flattened))
+        mu = self.hidden_to_mu(h_hidden)
+        var = self.hidden_to_var(h_hidden)
         return mu, var
 
 # Sample from encoder network
@@ -70,12 +70,14 @@ def sample_z(mu, log_var):
 class DecoderNet(torch.nn.Module):
     def __init__(self):
         super(DecoderNet, self).__init__()
-        self.state_to_hidden = torch.nn.Linear(state_size, hidden_dimension)
-        self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(6, 3, 2)
+        self.state_to_hidden = torch.nn.Linear(state_size, 1000)
+        self.hidden_to_hidden = torch.nn.Linear(1000, hidden_dimension)
+        self.hidden_to_reconstructed = torch.nn.ConvTranspose2d(3, 3, (3, 2))
     
     def forward(self, z):
         h = nn.relu(self.state_to_hidden(z))
-        h_unflattened = torch.reshape(h, (batch_size, 6, 74, 49))
+        h_hidden = nn.relu(self.hidden_to_hidden(h))
+        h_unflattened = torch.reshape(h_hidden, (batch_size, 3, 73, 49))
         X = torch.sigmoid(self.hidden_to_reconstructed(h_unflattened))
         return X
 
@@ -171,18 +173,17 @@ def get_batch_and_actions(env, batch_size):
 
 def main():
     # Setup
+    lr = 1e-3
 
     # Make transition Network
     T = TransitionNet().to(device)
     T.train()
 
+    # Make Autoencoder Network
     encoder = EncoderNet().to(device)
     encoder.train()
     decoder = DecoderNet().to(device)
     decoder.train()
-
-    # Make Autoencoder Network
-    # params = [Wxh, bxh, Whz_mu, bhz_mu, Whz_var, bhz_var, Wzh, bzh, Whx, bhx]
 
     # Set solver
     params = []
@@ -194,15 +195,16 @@ def main():
     # Losses
     predicted_state_loss_f = torch.nn.MSELoss()
     render_param_loss_f = torch.nn.MSELoss()
-    # predicted_state = None
 
     # Main loop
     env = gym.make("cartpole-visual-v1")
     step = 0
-    for i_episode in range(10000):
+    env.reset()
+    for i_episode in range(5000):
         print(str(step))
-        observation = env.reset()
         for t in range(100):
+            # Solver setup
+            solver.zero_grad()
 
             input_batch, actions = get_batch_and_actions(env, batch_size)
 
@@ -223,8 +225,7 @@ def main():
             recon_loss = nn.binary_cross_entropy(reconstructed_image, input_batch)
             kl_loss = 0.5 * torch.sum(torch.exp(z_var) + z_mu ** 2 - 1. - z_var)
 
-            render_param_loss = render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size])
-            render_param_loss = np.sum([render_param_loss_f(x, extracted_state[:, 0:rp_size]) for x in extracted_state[:, 0:rp_size]])
+            render_param_loss = torch.sqrt(render_param_loss_f(extracted_state[0:batch_size - 1, 0:rp_size], extracted_state[1:batch_size, 0:rp_size]))
 
             predicted_state = next_state[0:(batch_size - 1)]
             extracted_state_with_action = extracted_state_with_action[1:batch_size]
@@ -233,7 +234,7 @@ def main():
                         ((1. - render_param_loss_term) * ((1. - beta) * recon_loss + 
                             beta * kl_loss) + 
                             render_param_loss_term * render_param_loss) + 
-                    prediction_loss_term * prediction_loss) * loss_multiplier
+                    prediction_loss_term * prediction_loss)
             write_to_tensorboard(writer, step, recon_loss, kl_loss, prediction_loss, render_param_loss, loss)
             writer.add_scalar("renderparam sum", torch.sum(torch.abs(extracted_state[0, 0:rp_size])), step)
 
@@ -243,16 +244,15 @@ def main():
             # Backward pass
             loss.backward(retain_graph=True)
 
+            # Adaptive LR
+            lr = lr if recon_loss > 0.15 else 1e-4
+            for g in solver.param_groups:
+                g['lr'] = lr
+                writer.add_scalar("Learning Rate", lr, step)
+
             # Update
-            # adaptive_lr = min((1/(10**(3/13000)))**step if step != 0 else 1., 1e-6)
-            # if step == 300000:
-            #     for g in solver.param_groups:
-            #         g['lr'] = adaptive_lr
-            #     writer.add_scalar("Learning Rate", adaptive_lr, step)
             solver.step()
             step += 1
-
-            # predicted_state = next_state
     
 
 if __name__ == "__main__":
