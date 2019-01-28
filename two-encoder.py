@@ -160,13 +160,13 @@ def normalize_observation(observation):
     return observation
 
 def write_to_tensorboard(writer, loss, recon_loss, kl_loss, current_batcher, step):
-    if current_batcher == "renderparams":
+    if current_batcher < 10:
         writer.add_scalar("RP Reconstruction Loss", recon_loss, step)
         writer.add_scalar("RP Scaled Reconstruction Loss", (1. - beta) * recon_loss, step)
         writer.add_scalar("RP KL Loss", kl_loss, step)
         writer.add_scalar("RP Scaled KL Loss", beta * kl_loss, step)
         writer.add_scalar("RP Total Loss", loss, step)
-    elif current_batcher == "state":
+    elif current_batcher == 10:
         writer.add_scalar("State Reconstruction Loss", recon_loss, step)
         writer.add_scalar("State Scaled Reconstruction Loss", (1. - beta) * recon_loss, step)
         writer.add_scalar("State KL Loss", kl_loss, step)
@@ -207,7 +207,7 @@ def main():
     render_param_loss_term = 1e-3
     RPbatcher = get_batch(2050, 2100, batch_size)
     Sbatcher = get_batch(500, 1000, batch_size)
-    current_batcher = "renderparams"
+    current_batcher = 0
 
     # Make Networks objects
     RPen = RPencoder().to(device)
@@ -231,22 +231,22 @@ def main():
         RPsolver.zero_grad()
         Ssolver.zero_grad()
 
-        if current_batcher == "renderparams":
+        if current_batcher < 10:
             batch = next(RPbatcher)
             if batch is None:
                 epoch += 1
                 RPbatcher = get_batch(2050, 2100, batch_size)
                 batch = next(RPbatcher)
-                if epoch > 50:
-                    current_batcher = "state"
+                # if epoch > 50:
+                current_batcher += 1
                 print(epoch, current_batcher)
-        elif current_batcher == "state":
+        elif current_batcher == 10:
             batch = next(Sbatcher)
             if batch is None:
                 epoch += 1
                 Sbatcher = get_batch(500, 1000, batch_size)
                 batch = next(Sbatcher)
-                current_batcher = "renderparams"
+                current_batcher = 0
                 print(epoch, current_batcher)
         
         observations, actions = batch
@@ -284,9 +284,9 @@ def main():
         loss.backward()
 
         # Update
-        if current_batcher == "renderparams":
+        if current_batcher < 10:
             RPsolver.step()
-        elif current_batcher == "state":
+        elif current_batcher == 10:
             Ssolver.step()
         step += 1
     
