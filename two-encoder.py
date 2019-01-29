@@ -23,8 +23,9 @@ writer = SummaryWriter("runs/test" + str(test_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
-batch_size = 100
-state_size = 5
+batch_size = 1
+mixed_batch_size = 100
+state_size = 50
 rp_size = 50
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
@@ -70,7 +71,7 @@ class RPencoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 100 * 2 * 2)
+        conved = conved.reshape(mixed_batch_size, 100 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
@@ -115,7 +116,7 @@ class Sencoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.encoder(x)
-        conved = conved.reshape(100, 100 * 2 * 2)
+        conved = conved.reshape(mixed_batch_size, 100 * 2 * 2)
         mu = self.linear_encoder_mu(conved)
         sigma = self.linear_encoder_sigma(conved)
 
@@ -130,6 +131,10 @@ class Decoder(nn.Module):
 
         self.linear_decoder = nn.Sequential(
             nn.Linear(state_size + rp_size, 100 * 2 * 2), # b, 100, 2, 2
+            nn.ReLU(True),
+            nn.Linear(100 * 2 * 2, 800),
+            nn.ReLU(True),
+            nn.Linear(800, 100 * 2 * 2),
             nn.ReLU(True)
         )
 
@@ -145,13 +150,13 @@ class Decoder(nn.Module):
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(100, 100, 2, 2)
+        recon = recon.reshape(mixed_batch_size, 100, 2, 2)
         recon = self.decoder(recon)
         return recon
 
 
 def normalize_observation(observation):
-    observation = observation.reshape(batch_size, img_size[0], img_size[1], 3)
+    observation = observation.reshape(mixed_batch_size, img_size[0], img_size[1], 3)
     observation = np.transpose(observation, (0, 3, 2, 1))
     observation = observation.copy()
     observation = observation / 255.
@@ -159,19 +164,10 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, recon_loss, kl_loss, current_batcher, step):
-    if current_batcher < 10:
-        writer.add_scalar("RP Reconstruction Loss", recon_loss, step)
-        writer.add_scalar("RP Scaled Reconstruction Loss", (1. - beta) * recon_loss, step)
-        writer.add_scalar("RP KL Loss", kl_loss, step)
-        writer.add_scalar("RP Scaled KL Loss", beta * kl_loss, step)
-        writer.add_scalar("RP Total Loss", loss, step)
-    elif current_batcher == 10:
-        writer.add_scalar("State Reconstruction Loss", recon_loss, step)
-        writer.add_scalar("State Scaled Reconstruction Loss", (1. - beta) * recon_loss, step)
-        writer.add_scalar("State KL Loss", kl_loss, step)
-        writer.add_scalar("State Scaled KL Loss", beta * kl_loss, step)
-        writer.add_scalar("State Total Loss", loss, step)
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, step):
+    writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
+    writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
+    writer.add_scalar("Total Loss", loss, step)
 
 def save_weights(it, encoder, decoder, transition):
     if it % 10000 == 0:
@@ -203,7 +199,7 @@ def get_batch(starting_batch, ending_batch, batch_size):
 
 def main():
     # Setup
-    lr = 1e-2
+    # lr = 1e-2
     render_param_loss_term = 1e-3
     RPbatcher = get_batch(2050, 2100, batch_size)
     Sbatcher = get_batch(500, 1000, batch_size)
@@ -217,39 +213,47 @@ def main():
     # Set solver
     RPparams = [x for x in RPen.parameters()]
     [RPparams.append(x) for x in decoder.parameters()]
-    RPsolver = optim.Adam(RPparams, lr=lr)
+    RPsolver = optim.Adam(RPparams, lr=1e-5)
 
     Sparams = [x for x in Sen.parameters()]
     [Sparams.append(x) for x in decoder.parameters()]
-    Ssolver = optim.Adam(Sparams, lr=lr)
+    Ssolver = optim.Adam(Sparams, lr=1e-5)
 
     # Main loop
     step = 0
     epoch = 0
     while True:
+        print(step)
         # Solver setup
         RPsolver.zero_grad()
         Ssolver.zero_grad()
 
-        if current_batcher < 10:
-            batch = next(RPbatcher)
-            if batch is None:
-                epoch += 1
-                RPbatcher = get_batch(2050, 2100, batch_size)
+        mixed_batch = ([], [])
+        for _ in range(mixed_batch_size):
+            if current_batcher == 0:
                 batch = next(RPbatcher)
-                # if epoch > 50:
-                current_batcher += 1
-                print(epoch, current_batcher)
-        elif current_batcher == 10:
-            batch = next(Sbatcher)
-            if batch is None:
-                epoch += 1
-                Sbatcher = get_batch(500, 1000, batch_size)
+                if batch is None:
+                    epoch += 1
+                    RPbatcher = get_batch(2050, 2100, batch_size)
+                    batch = next(RPbatcher)
+                    # if epoch > 50:
+                # print(epoch, current_batcher)
+                current_batcher = 1
+            elif current_batcher == 1:
                 batch = next(Sbatcher)
+                if batch is None:
+                    epoch += 1
+                    Sbatcher = get_batch(500, 1000, batch_size)
+                    batch = next(Sbatcher)
+                # print(epoch, current_batcher)
                 current_batcher = 0
-                print(epoch, current_batcher)
+            mixed_batch[0].append(batch[0][0])
+            mixed_batch[1].append(batch[1])
+        mixed_batch = (np.array(mixed_batch[0]), np.array(mixed_batch[1]))
         
-        observations, actions = batch
+        observations, actions = mixed_batch
+        # print(observations.shape, actions.shape)
+        # print(batch[0].shape, batch[1].shape)
         observations = normalize_observation(observations).astype(np.float32)
         observations = torch.from_numpy(observations).to(device)
 
@@ -257,6 +261,7 @@ def main():
         render_params, rp_mu, rp_sigma = RPen(observations)
         state, s_mu, s_sigma = Sen(observations)
         encoded = torch.cat((render_params, state), 1)
+        # print(encoded[0, :])
         reconstructed_images = decoder(encoded)
 
         if step % 50 == 0:
@@ -269,27 +274,28 @@ def main():
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        recon_loss = F.binary_cross_entropy(reconstructed_images, observations)
-        # kl_loss = 0.5 * torch.sum(torch.exp(rp_sigma) + rp_mu ** 2 - 1. - rp_sigma) if current_batcher == "renderparams" else 0.5 * torch.sum(torch.exp(s_sigma) + s_mu ** 2 - 1. - s_sigma)
+        rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
+                                               observations[::2])
+        s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
+                                              observations[1::2])
 
-        # loss = (1. - beta) * recon_loss + beta * kl_loss
-        loss = recon_loss
+        loss = rp_recon_loss + s_recon_loss
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, recon_loss, 0., current_batcher, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
         # Backward pass
-        loss.backward()
+        rp_recon_loss.backward(retain_graph=True)
+        RPsolver.step()
+        RPsolver.zero_grad()
 
         # Update
-        if current_batcher < 10:
-            RPsolver.step()
-        elif current_batcher == 10:
-            Ssolver.step()
-        step += 1
-    
+        s_recon_loss.backward()
+        Ssolver.step()
+        Ssolver.zero_grad()
+        step += 1    
 
 if __name__ == "__main__":
     main()
