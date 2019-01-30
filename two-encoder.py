@@ -217,7 +217,7 @@ def main():
 
     Sparams = [x for x in Sen.parameters()]
     [Sparams.append(x) for x in decoder.parameters()]
-    Ssolver = optim.Adam(Sparams, lr=1e-5)
+    Ssolver = optim.Adam(Sparams, lr=1e-4)
 
     # Main loop
     step = 0
