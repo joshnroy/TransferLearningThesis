@@ -17,9 +17,9 @@ import gym_cartpole_visual
 
 prev_runs = os.listdir("runs/")
 
-test_num = int(max(prev_runs)[4]) + 1
+trial_num = int(max(prev_runs)[5]) + 1
 
-writer = SummaryWriter("runs/test" + str(test_num))
+writer = SummaryWriter("runs/trial" + str(trial_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
@@ -35,9 +35,9 @@ beta = 1e-3
 prediction_loss_term = 0.
 
 # Network
-class RPencoder(nn.Module):
+class rp_encoder(nn.Module):
     def __init__(self):
-        super(RPencoder, self).__init__()
+        super(rp_encoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
@@ -79,9 +79,9 @@ class RPencoder(nn.Module):
 
         return render_params, mu, sigma
 
-class Sencoder(nn.Module):
+class s_encoder(nn.Module):
     def __init__(self):
-        super(Sencoder, self).__init__()
+        super(s_encoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
@@ -162,20 +162,17 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, test_rp_recon_loss,
-                         test_s_recon_loss, step):
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step):
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
-    writer.add_scalar("Total Loss", loss, step)
-    writer.add_scalar("Test RP Reconstruction Loss", test_rp_recon_loss, step)
-    writer.add_scalar("Test S Reconstruction Loss", test_s_recon_loss, step)
-    writer.add_scalar("Test Total Loss", test_loss, step)
+    writer.add_scalar("Train Loss", loss, step)
+    writer.add_scalar("Test Loss", test_loss, step)
 
 def save_weights(it, encoder, decoder, transition):
     if it % 10000 == 0:
-        torch.save(encoder, "models/encoder_model_" + str(test_num) + "_" + str(it) + ".pt")
-        torch.save(decoder, "models/decoder_model_" + str(test_num) + "_" + str(it) + ".pt")
-        torch.save(transition, "models/transition_model_" + str(test_num) + "_" + str(it) + ".pt")
+        torch.save(encoder, "models/encoder_model_" + str(trial_num) + "_" + str(it) + ".pt")
+        torch.save(decoder, "models/decoder_model_" + str(trial_num) + "_" + str(it) + ".pt")
+        torch.save(transition, "models/transition_model_" + str(trial_num) + "_" + str(it) + ".pt")
 
 
 def pytorch_to_cv(img):
@@ -211,22 +208,25 @@ def main():
     current_batcher = 0
 
     # Make Networks objects
-    RPen = RPencoder().to(device)
-    Sen = Sencoder().to(device)
+    rp_en = rp_encoder().to(device)
+    s_en = s_encoder().to(device)
     decoder = Decoder().to(device)
 
-    RPen.train()
-    Sen.train()
+    rp_en.train()
+    s_en.train()
     decoder.train()
 
     # Set solver
-    RPparams = [x for x in RPen.parameters()]
-    [RPparams.append(x) for x in decoder.parameters()]
-    RPsolver = optim.Adam(RPparams, lr=1e-5)
+    rp_params = [x for x in rp_en.parameters()]
+    # [rp_params.append(x) for x in decoder.parameters()]
+    rp_solver = optim.Adam(rp_params, lr=1e-5)
 
-    Sparams = [x for x in Sen.parameters()]
-    [Sparams.append(x) for x in decoder.parameters()]
-    Ssolver = optim.Adam(Sparams, lr=1e-4)
+    s_params = [x for x in s_en.parameters()]
+    # [s_params.append(x) for x in decoder.parameters()]
+    s_solver = optim.Adam(s_params, lr=1e-4)
+
+    d_params = [x for x in decoder.parameters()]
+    d_solver = optim.Adam(d_params, lr=1e-5)
 
     # Main loop
     step = 0
@@ -234,8 +234,9 @@ def main():
     while True:
         print(step)
         # Solver setup
-        RPsolver.zero_grad()
-        Ssolver.zero_grad()
+        rp_solver.zero_grad()
+        s_solver.zero_grad()
+        d_solver.zero_grad()
 
         mixed_batch = ([], [])
         for _ in range(mixed_batch_size):
@@ -262,8 +263,8 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        render_params, rp_mu, rp_sigma = RPen(observations)
-        state, s_mu, s_sigma = Sen(observations)
+        render_params, rp_mu, rp_sigma = rp_en(observations)
+        state, s_mu, s_sigma = s_en(observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -278,8 +279,8 @@ def main():
         loss = rp_recon_loss + s_recon_loss
 
         # Test the model
-        RPen.eval()
-        Sen.eval()
+        rp_en.eval()
+        s_en.eval()
         decoder.eval()
 
         test_batcher = get_batch(500, 1000, mixed_batch_size, False)
@@ -288,40 +289,37 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        render_params, rp_mu, rp_sigma = RPen(observations)
-        state, s_mu, s_sigma = Sen(observations)
+        render_params, rp_mu, rp_sigma = rp_en(observations)
+        state, s_mu, s_sigma = s_en(observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        test_rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
-                                              observations[::2])
-        test_s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
-                                             observations[1::2])
+        test_loss = F.binary_cross_entropy(reconstructed_images, observations)
 
-        test_loss = rp_recon_loss + s_recon_loss
+        rp_solver.zero_grad()
+        s_solver.zero_grad()
+        d_solver.zero_grad()
 
-        RPen.train()
-        Sen.train()
+        rp_en.train()
+        s_en.train()
         decoder.train()
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss,
-                             test_rp_recon_loss, test_s_recon_loss, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
-        # Backward pass
+        # Backward pass and Update
         rp_recon_loss.backward(retain_graph=True)
-        RPsolver.step()
-        RPsolver.zero_grad()
+        rp_solver.step()
 
-        # Update
         s_recon_loss.backward()
-        Ssolver.step()
-        Ssolver.zero_grad()
+        s_solver.step()
+
+        d_solver.step()
         step += 1    
 
 if __name__ == "__main__":
