@@ -25,7 +25,6 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 img_size = (45, 80)
 batch_size = 1
 mixed_batch_size = 100
-test_batch_size = 100
 state_size = 50
 rp_size = 50
 action_size = 1
@@ -163,7 +162,7 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_rp_recon_loss,
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, test_rp_recon_loss,
                          test_s_recon_loss, step):
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
@@ -190,6 +189,7 @@ def pytorch_to_cv(img):
 def get_batch(starting_batch, ending_batch, batch_size, train):
     data_iter = starting_batch
     while data_iter <= ending_batch:
+        data = None
         if train:
             data = np.load("training_data/training_data_" + str(data_iter) + ".npy")
         else:
@@ -243,14 +243,14 @@ def main():
                 batch = next(RPbatcher)
                 if batch is None:
                     epoch += 1
-                    RPbatcher = get_batch(2050, 2100, batch_size)
+                    RPbatcher = get_batch(2050, 2100, batch_size, True)
                     batch = next(RPbatcher)
                 current_batcher = 1
             elif current_batcher == 1:
                 batch = next(Sbatcher)
                 if batch is None:
                     epoch += 1
-                    Sbatcher = get_batch(500, 1000, batch_size)
+                    Sbatcher = get_batch(500, 1000, batch_size, True)
                     batch = next(Sbatcher)
                 current_batcher = 0
             mixed_batch[0].append(batch[0][0])
@@ -282,27 +282,26 @@ def main():
         Sen.eval()
         decoder.eval()
 
-        test_batcher = get_batch(500, 1000, batch_size, False)
-        for test_batch in test_batcher:
-            observations, actions = test_batch
-            observations = normalize_observation(observations).astype(np.float32)
-            observations = torch.from_numpy(observations).to(device)
+        test_batcher = get_batch(500, 1000, mixed_batch_size, False)
+        observations, actions = next(test_batcher)
+        observations = normalize_observation(observations).astype(np.float32)
+        observations = torch.from_numpy(observations).to(device)
 
-            # Forward pass of the network
-            render_params, rp_mu, rp_sigma = RPen(observations)
-            state, s_mu, s_sigma = Sen(observations)
-            encoded = torch.cat((render_params, state), 1)
-            reconstructed_images = decoder(encoded)
+        # Forward pass of the network
+        render_params, rp_mu, rp_sigma = RPen(observations)
+        state, s_mu, s_sigma = Sen(observations)
+        encoded = torch.cat((render_params, state), 1)
+        reconstructed_images = decoder(encoded)
 
-            # Compute Loss
-            assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
+        # Compute Loss
+        assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-            test_rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
-                                                  observations[::2])
-            test_s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
-                                                 observations[1::2])
+        test_rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
+                                              observations[::2])
+        test_s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
+                                             observations[1::2])
 
-            test_loss = rp_recon_loss + s_recon_loss
+        test_loss = rp_recon_loss + s_recon_loss
 
         RPen.train()
         Sen.train()
