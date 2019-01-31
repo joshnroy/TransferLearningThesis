@@ -33,6 +33,7 @@ action_dimension = 2
 
 beta = 1e-3
 prediction_loss_term = 0.
+reconstruction_weight_term = 0.5
 
 # Network
 class rp_encoder(nn.Module):
@@ -42,6 +43,7 @@ class rp_encoder(nn.Module):
             nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
+            nn.Dropout2d(p=0.2),
             nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
@@ -58,6 +60,12 @@ class rp_encoder(nn.Module):
         )
 
         self.linear_encoder = nn.Sequential(
+            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
+            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
             nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
@@ -86,6 +94,7 @@ class s_encoder(nn.Module):
             nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
+            nn.Dropout2d(p=0.2),
             nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
@@ -102,6 +111,12 @@ class s_encoder(nn.Module):
         )
 
         self.linear_encoder = nn.Sequential(
+            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
+            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
             nn.Linear(100 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
@@ -130,9 +145,17 @@ class Decoder(nn.Module):
         self.linear_decoder = nn.Sequential(
             nn.Linear(state_size + rp_size, 100 * 2 * 2), # b, 100, 2, 2
             nn.ReLU(True),
-            nn.Linear(100 * 2 * 2, 800),
+            nn.Dropout(p=0.2),
+            nn.Linear(100 * 2 * 2, 400),
             nn.ReLU(True),
-            nn.Linear(800, 100 * 2 * 2),
+            nn.Dropout(p=0.2),
+            nn.Linear(400, 400),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
+            nn.Linear(400, 400),
+            nn.ReLU(True),
+            nn.Dropout(p=0.2),
+            nn.Linear(400, 100 * 2 * 2),
             nn.ReLU(True)
         )
 
@@ -141,6 +164,7 @@ class Decoder(nn.Module):
             nn.ReLU(True),
             nn.ConvTranspose2d(200, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
+            nn.Dropout2d(p=0.2),
             nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
@@ -206,6 +230,10 @@ def main():
     RPbatcher = get_batch(2050, 2100, batch_size, True)
     Sbatcher = get_batch(500, 1000, batch_size, True)
     current_batcher = 0
+    test_batcher = get_batch(500, 1000, mixed_batch_size, False)
+    test_observations, test_actions = next(test_batcher)
+    test_observations = normalize_observation(test_observations).astype(np.float32)
+    test_observations = torch.from_numpy(test_observations).to(device)
 
     # Make Networks objects
     rp_en = rp_encoder().to(device)
@@ -216,17 +244,23 @@ def main():
     s_en.train()
     decoder.train()
 
+    lr=1e-3
+
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
     # [rp_params.append(x) for x in decoder.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=1e-4)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-5)
 
     s_params = [x for x in s_en.parameters()]
     # [s_params.append(x) for x in decoder.parameters()]
-    s_solver = optim.Adam(s_params, lr=1e-4)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-5)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=1e-4)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-5)
+
+    pics_dir = os.path.dirname("pics" + str(trial_num) + "/")
+    if not os.path.exists(pics_dir):
+        os.makedirs(pics_dir)
 
     # Main loop
     step = 0
@@ -271,6 +305,12 @@ def main():
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
+        if step % 1000 == 0:
+            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "rp_original.jpg", pytorch_to_cv(observations[0]))
+            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "rp_reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
+            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "s_original.jpg", pytorch_to_cv(observations[1]))
+            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "s_reconstructed.jpg", pytorch_to_cv(reconstructed_images[1]))
+
         rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
                                                observations[::2])
         s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
@@ -283,21 +323,20 @@ def main():
         s_en.eval()
         decoder.eval()
 
-        test_batcher = get_batch(500, 1000, mixed_batch_size, False)
-        observations, actions = next(test_batcher)
-        observations = normalize_observation(observations).astype(np.float32)
-        observations = torch.from_numpy(observations).to(device)
-
         # Forward pass of the network
-        render_params, rp_mu, rp_sigma = rp_en(observations)
-        state, s_mu, s_sigma = s_en(observations)
+        render_params, rp_mu, rp_sigma = rp_en(test_observations)
+        state, s_mu, s_sigma = s_en(test_observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        test_loss = F.binary_cross_entropy(reconstructed_images, observations)
+        test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
+
+        if step % 1000 == 0:
+            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "test_original.jpg", pytorch_to_cv(test_observations[0]))
+            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "test_reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
 
         rp_solver.zero_grad()
         s_solver.zero_grad()
