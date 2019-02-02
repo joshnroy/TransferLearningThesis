@@ -31,148 +31,112 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
+alpha = 1.
 beta = 1e-3
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
+encoding_regularization_term = 1e-2
 
 # Network
 class rp_encoder(nn.Module):
     def __init__(self):
         super(rp_encoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
+        self.rp_encoder = nn.Sequential(
+            nn.Conv2d(3, 3, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            nn.Dropout2d(p=0.2),
-            nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
+            # nn.Dropout2d(p=0.2),
+            nn.Conv2d(3, 3, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
-        self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
-            nn.ReLU(True)
-        )
-
-        self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
-            nn.ReLU(True)
-        )
-
-        self.linear_encoder = nn.Sequential(
-            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
-            nn.ReLU(True),
-            nn.Dropout(p=0.2),
-            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
-            nn.ReLU(True),
+        self.rp_linear_encoder = nn.Sequential(
+            # nn.Linear(100 * 2 * 2, 100 * 2 * 2),
+            # nn.ReLU(True),
+            # # nn.Dropout(p=0.2),
+            # nn.Linear(100 *  2 * 2, 100),
+            # nn.ReLU(True),
             # nn.Dropout(p=0.2),
-            nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
+            nn.Linear(3 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
-
-    # Sample from encoder network
-    def sample_z(self, mu, log_var):
-        # Using reparameterization trick to sample from a gaussian
-        eps = Variable(torch.randn(batch_size, rp_size)).to(device)
-        return mu + torch.exp(log_var / 2) * eps
 
     def forward (self, x):
         # Encode
-        conved = self.encoder(x)
-        conved = conved.reshape(mixed_batch_size, 100 * 2 * 2)
-        mu = self.linear_encoder_mu(conved)
-        sigma = self.linear_encoder_sigma(conved)
+        conved = self.rp_encoder(x)
+        conved = conved.reshape(mixed_batch_size, 3 * 2 * 2)
+        render_params = self.rp_linear_encoder(conved)
 
-        render_params = self.linear_encoder(conved)
-
-        return render_params, mu, sigma
+        return render_params
 
 class s_encoder(nn.Module):
     def __init__(self):
         super(s_encoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 200, (4, 3), stride=(4, 3)), # b, 200, 20, 15
+        self.s_encoder = nn.Sequential(
+            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
             nn.Dropout2d(p=0.2),
-            nn.Conv2d(200, 100, 3, stride=2, padding=1), # b, 100, 3, 3
+            nn.Conv2d(100, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             nn.ReLU(True),
             nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
-        self.linear_encoder_mu = nn.Sequential(
-            nn.Linear(100 * 2 * 2, state_size), # b, state_size
-            nn.ReLU(True)
-        )
-
-        self.linear_encoder_sigma = nn.Sequential(
-            nn.Linear(100 * 2 * 2, state_size), # b, state_size
-            nn.ReLU(True)
-        )
-
-        self.linear_encoder = nn.Sequential(
-            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
-            nn.ReLU(True),
-            nn.Dropout(p=0.2),
-            nn.Linear(100 *  2 * 2, 100 * 2 * 2),
-            nn.ReLU(True),
+        self.s_linear_encoder = nn.Sequential(
+            # nn.Linear(100 *  2 * 2, 100 * 2 * 2),
+            # nn.ReLU(True),
+            # # nn.Dropout(p=0.2),
+            # nn.Linear(100 *  2 * 2, 100),
+            # nn.ReLU(True),
             # nn.Dropout(p=0.2),
             nn.Linear(100 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
 
-    # Sample from encoder network
-    def sample_z(self, mu, log_var):
-        # Using reparameterization trick to sample from a gaussian
-        eps = Variable(torch.randn(batch_size, state_size)).to(device)
-        return mu + torch.exp(log_var / 2) * eps
-
     def forward (self, x):
         # Encode
-        conved = self.encoder(x)
+        conved = self.s_encoder(x)
         conved = conved.reshape(mixed_batch_size, 100 * 2 * 2)
-        mu = self.linear_encoder_mu(conved)
-        sigma = self.linear_encoder_sigma(conved)
+        state = self.s_linear_encoder(conved)
 
-        state = self.linear_encoder(conved)
-
-        return state, mu, sigma
+        return state
 
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 200 * 2 * 2), # b, 100, 2, 2
+            nn.Linear(state_size + rp_size, 400), # b, 100, 2, 2
             nn.ReLU(True),
             # nn.Dropout(p=0.2),
-            nn.Linear(200 * 2 * 2, 400),
-            nn.ReLU(True),
+            # nn.Linear(100, 400),
+            # nn.ReLU(True),
+            # # nn.Dropout(p=0.2),
+            # nn.Linear(400, 400),
+            # nn.ReLU(True),
+            # # nn.Dropout(p=0.2),
+            # nn.Linear(400, 400),
+            # nn.ReLU(True),
             # nn.Dropout(p=0.2),
-            nn.Linear(400, 400),
-            nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            nn.Linear(400, 400),
-            nn.ReLU(True),
-            nn.Dropout(p=0.2),
-            nn.Linear(400, 200 * 2 * 2),
+            nn.Linear(400, 100 * 2 * 2),
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(200, 400, 3, stride=2), # b, 200, 5, 5
+            nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
             nn.ReLU(True),
-            nn.ConvTranspose2d(400, 200, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
+            nn.ConvTranspose2d(200, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
             nn.Dropout2d(p=0.2),
-            nn.ConvTranspose2d(200, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
+            nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, 200, 2, 2)
+        recon = recon.reshape(mixed_batch_size, 100, 2, 2)
         recon = self.decoder(recon)
         return recon
 
@@ -186,11 +150,13 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step):
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss,
+                         encoding_regularization_loss, step):
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
     writer.add_scalar("Train Loss", loss, step)
     writer.add_scalar("Test Loss", test_loss, step)
+    writer.add_scalar("Encoding Regularization Loss", encoding_regularization_loss, step)
 
 def save_weights(it, encoder, decoder, transition):
     if it % 10000 == 0:
@@ -200,12 +166,9 @@ def save_weights(it, encoder, decoder, transition):
 
 
 def pytorch_to_cv(img):
-    input_numpy = img.detach().cpu().numpy()
-    input_numpy = np.transpose(input_numpy, (2, 1, 0))
-    input_numpy = np.round(input_numpy * 255.)
-    input_numpy = input_numpy.astype(int)
+    img_channels = img
 
-    return input_numpy
+    return img_channels
 
 def get_batch(starting_batch, ending_batch, batch_size, train):
     data_iter = starting_batch
@@ -244,23 +207,20 @@ def main():
     s_en.train()
     decoder.train()
 
+    # lr = 1e-2
     lr = 1e-3
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
     # [rp_params.append(x) for x in decoder.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=0.)
+    rp_solver = optim.Adam(rp_params, lr=lr)
 
     s_params = [x for x in s_en.parameters()]
     # [s_params.append(x) for x in decoder.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=0.)
+    s_solver = optim.Adam(s_params, lr=lr)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=0.)
-
-    pics_dir = os.path.dirname("pics" + str(trial_num) + "/")
-    if not os.path.exists(pics_dir):
-        os.makedirs(pics_dir)
+    d_solver = optim.Adam(d_params, lr=lr)
 
     # Main loop
     step = 0
@@ -297,32 +257,46 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        render_params, rp_mu, rp_sigma = rp_en(observations)
-        state, s_mu, s_sigma = s_en(observations)
+        render_params = rp_en(observations)
+        state = s_en(observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
         # Compute Loss
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        if step % 1000 == 0:
-            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "rp_original.jpg", pytorch_to_cv(observations[0]))
-            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "rp_reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
-            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "s_original.jpg", pytorch_to_cv(observations[1]))
-            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "s_reconstructed.jpg", pytorch_to_cv(reconstructed_images[1]))
+        if step % 100 == 0:
+            writer.add_image("rp_original", pytorch_to_cv(observations[0]), step)
+            writer.add_image("rp_reconstructed", pytorch_to_cv(reconstructed_images[0]), step)
+            writer.add_image("s_original", pytorch_to_cv(observations[1]), step)
+            writer.add_image("s_reconstructed", pytorch_to_cv(reconstructed_images[1]), step)
+
+        if step % 100 == 0:
+            for name, param in rp_en.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+            for name, param in s_en.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+            for name, param in decoder.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+            writer.add_histogram("RP and S", encoded.clone().cpu().data.numpy(), step)
 
         rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
                                                observations[::2])
         s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
                                               observations[1::2])
 
-        loss = rp_recon_loss + s_recon_loss
+        encoding_regularization_loss = encoding_regularization_term * torch.var(encoded)
+
+        loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
 
         # Backward pass and Update
-        rp_recon_loss.backward(retain_graph=True)
+        # encoding_regularization_loss.backward(retain_graph=True)
+
+        loss.backward()
+        # rp_recon_loss.backward(retain_graph=True)
         rp_solver.step()
 
-        s_recon_loss.backward()
+        # s_recon_loss.backward(retain_graph=True)
         s_solver.step()
 
         d_solver.step()
@@ -333,8 +307,8 @@ def main():
         decoder.eval()
 
         # Forward pass of the network
-        render_params, rp_mu, rp_sigma = rp_en(test_observations)
-        state, s_mu, s_sigma = s_en(test_observations)
+        render_params = rp_en(test_observations)
+        state = s_en(test_observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -343,9 +317,9 @@ def main():
 
         test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
 
-        if step % 1000 == 0:
-            cv2.imwrite("pics" + str(trial_num) + "/"+ str(step) + "_" + "test_original.jpg", pytorch_to_cv(test_observations[0]))
-            cv2.imwrite("pics" + str(trial_num) + "/" + str(step) + "_" + "test_reconstructed.jpg", pytorch_to_cv(reconstructed_images[0]))
+        if step % 100 == 0:
+            writer.add_image("test_original", pytorch_to_cv(observations[0]), step)
+            writer.add_image("test_reconstructed", pytorch_to_cv(reconstructed_images[0]), step)
 
         rp_solver.zero_grad()
         s_solver.zero_grad()
@@ -356,7 +330,8 @@ def main():
         decoder.train()
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss,
+                             encoding_regularization_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
