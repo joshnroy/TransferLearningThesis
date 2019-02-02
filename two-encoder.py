@@ -65,7 +65,7 @@ class rp_encoder(nn.Module):
             nn.Dropout(p=0.2),
             nn.Linear(100 *  2 * 2, 100 * 2 * 2),
             nn.ReLU(True),
-            nn.Dropout(p=0.2),
+            # nn.Dropout(p=0.2),
             nn.Linear(100 * 2 * 2, rp_size), # b, rp_size
             nn.ReLU(True)
         )
@@ -116,7 +116,7 @@ class s_encoder(nn.Module):
             nn.Dropout(p=0.2),
             nn.Linear(100 *  2 * 2, 100 * 2 * 2),
             nn.ReLU(True),
-            nn.Dropout(p=0.2),
+            # nn.Dropout(p=0.2),
             nn.Linear(100 * 2 * 2, state_size), # b, state_size
             nn.ReLU(True)
         )
@@ -143,36 +143,36 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 100 * 2 * 2), # b, 100, 2, 2
+            nn.Linear(state_size + rp_size, 200 * 2 * 2), # b, 100, 2, 2
             nn.ReLU(True),
-            nn.Dropout(p=0.2),
-            nn.Linear(100 * 2 * 2, 400),
+            # nn.Dropout(p=0.2),
+            nn.Linear(200 * 2 * 2, 400),
             nn.ReLU(True),
-            nn.Dropout(p=0.2),
+            # nn.Dropout(p=0.2),
+            nn.Linear(400, 400),
+            nn.ReLU(True),
+            # nn.Dropout(p=0.2),
             nn.Linear(400, 400),
             nn.ReLU(True),
             nn.Dropout(p=0.2),
-            nn.Linear(400, 400),
-            nn.ReLU(True),
-            nn.Dropout(p=0.2),
-            nn.Linear(400, 100 * 2 * 2),
+            nn.Linear(400, 200 * 2 * 2),
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
+            nn.ConvTranspose2d(200, 400, 3, stride=2), # b, 200, 5, 5
             nn.ReLU(True),
-            nn.ConvTranspose2d(200, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
+            nn.ConvTranspose2d(400, 200, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
             nn.Dropout2d(p=0.2),
-            nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
+            nn.ConvTranspose2d(200, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, 100, 2, 2)
+        recon = recon.reshape(mixed_batch_size, 200, 2, 2)
         recon = self.decoder(recon)
         return recon
 
@@ -244,19 +244,19 @@ def main():
     s_en.train()
     decoder.train()
 
-    lr=1e-3
+    lr = 1e-3
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
     # [rp_params.append(x) for x in decoder.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-5)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=0.)
 
     s_params = [x for x in s_en.parameters()]
     # [s_params.append(x) for x in decoder.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-5)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=0.)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-5)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=0.)
 
     pics_dir = os.path.dirname("pics" + str(trial_num) + "/")
     if not os.path.exists(pics_dir):
@@ -318,6 +318,15 @@ def main():
 
         loss = rp_recon_loss + s_recon_loss
 
+        # Backward pass and Update
+        rp_recon_loss.backward(retain_graph=True)
+        rp_solver.step()
+
+        s_recon_loss.backward()
+        s_solver.step()
+
+        d_solver.step()
+
         # Test the model
         rp_en.eval()
         s_en.eval()
@@ -351,14 +360,6 @@ def main():
         # Save weights
         # TODO: Save when we care about this
 
-        # Backward pass and Update
-        rp_recon_loss.backward(retain_graph=True)
-        rp_solver.step()
-
-        s_recon_loss.backward()
-        s_solver.step()
-
-        d_solver.step()
         step += 1    
 
 if __name__ == "__main__":
