@@ -47,7 +47,7 @@ class rp_encoder(nn.Module):
             nn.Conv2d(3, 3, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            # nn.Dropout2d(p=0.4),
+            # nn.Dropout2d(p=0.2),
             # nn.Conv2d(3, 3, 3, stride=2, padding=1), # b, 100, 3, 3
             # nn.ReLU(True),
             # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
@@ -56,10 +56,10 @@ class rp_encoder(nn.Module):
         self.rp_linear_encoder = nn.Sequential(
             # nn.Linear(100 * 2 * 2, 100 * 2 * 2),
             # nn.ReLU(True),
-            # nn.Dropout(p=0.4),
+            # nn.Dropout(p=0.2),
             # nn.Linear(100 *  2 * 2, 100),
             # nn.ReLU(True),
-            nn.Dropout(p=0.4),
+            nn.Dropout(p=0.2),
             nn.Linear(3 * 5 * 5, rp_size), # b, rp_size
             nn.ReLU(True)
         )
@@ -79,7 +79,7 @@ class s_encoder(nn.Module):
             nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            # nn.Dropout2d(p=0.4),
+            # nn.Dropout2d(p=0.2),
             # nn.Conv2d(100, 100, 3, stride=2, padding=1), # b, 100, 3, 3
             # nn.ReLU(True),
             # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
@@ -88,10 +88,10 @@ class s_encoder(nn.Module):
         self.s_linear_encoder = nn.Sequential(
             # nn.Linear(100 *  2 * 2, 100 * 2 * 2),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.4),
+            # # nn.Dropout(p=0.2),
             # nn.Linear(100 *  2 * 2, 100),
             # nn.ReLU(True),
-            nn.Dropout(p=0.4),
+            nn.Dropout(p=0.2),
             nn.Linear(100 * 5 * 5, state_size), # b, state_size
             nn.ReLU(True)
         )
@@ -111,16 +111,16 @@ class Decoder(nn.Module):
         self.linear_decoder = nn.Sequential(
             # nn.Linear(state_size + rp_size, 100), # b, 100, 2, 2
             # nn.ReLU(True),
-            # nn.Dropout(p=0.4),
+            # nn.Dropout(p=0.2),
             # nn.Linear(100, 400),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.4),
+            # # nn.Dropout(p=0.2),
             # nn.Linear(400, 400),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.4),
+            # # nn.Dropout(p=0.2),
             # nn.Linear(400, 400),
             # nn.ReLU(True),
-            # nn.Dropout(p=0.4),
+            # nn.Dropout(p=0.2),
             nn.Linear(state_size + rp_size, 100 * 5 * 5),
             nn.ReLU(True)
         )
@@ -130,7 +130,7 @@ class Decoder(nn.Module):
             # nn.ReLU(True),
             nn.ConvTranspose2d(100, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
-            nn.Dropout2d(p=0.4),
+            nn.Dropout2d(p=0.2),
             nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
@@ -253,8 +253,20 @@ def main():
             mixed_batch[0].append(batch[0][0])
             mixed_batch[1].append(batch[1])
         mixed_batch = (np.array(mixed_batch[0]), np.array(mixed_batch[1]))
+
+        # Shuffle batches
+        shuffle_rp = np.arange(int(mixed_batch_size / 2))
+        np.random.shuffle(shuffle_rp)
+        shuffle_s = np.arange(int(mixed_batch_size / 2))
+        np.random.shuffle(shuffle_s)
         
         observations, actions = mixed_batch
+
+        observations[::2] = observations[::2][shuffle_rp]
+        actions[::2] = actions[::2][shuffle_rp]
+        observations[1::2] = observations[1::2][shuffle_s]
+        actions[::2] = actions[::2][shuffle_s]
+
         observations = normalize_observation(observations).astype(np.float32)
         observations = torch.from_numpy(observations).to(device)
 
