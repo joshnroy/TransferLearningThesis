@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import cv2
 from tensorboardX import SummaryWriter
 import sys
+from random import randint
 
 import gym
 import gym_cartpole_visual
@@ -24,14 +25,15 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
 batch_size = 1
-mixed_batch_size = 100
+mixed_batch_size = 200
+test_batch_size = 100
 state_size = 50
 rp_size = 50
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
-alpha = 1.
+alpha = 0.5
 beta = 1e-3
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
@@ -45,27 +47,27 @@ class rp_encoder(nn.Module):
             nn.Conv2d(3, 3, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            # nn.Dropout2d(p=0.2),
-            nn.Conv2d(3, 3, 3, stride=2, padding=1), # b, 100, 3, 3
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
+            # nn.Dropout2d(p=0.4),
+            # nn.Conv2d(3, 3, 3, stride=2, padding=1), # b, 100, 3, 3
+            # nn.ReLU(True),
+            # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.rp_linear_encoder = nn.Sequential(
             # nn.Linear(100 * 2 * 2, 100 * 2 * 2),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
+            # nn.Dropout(p=0.4),
             # nn.Linear(100 *  2 * 2, 100),
             # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            nn.Linear(3 * 2 * 2, rp_size), # b, rp_size
+            nn.Dropout(p=0.4),
+            nn.Linear(3 * 5 * 5, rp_size), # b, rp_size
             nn.ReLU(True)
         )
 
     def forward (self, x):
         # Encode
         conved = self.rp_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 3 * 2 * 2)
+        conved = conved.reshape(mixed_batch_size, 3 * 5 * 5)
         render_params = self.rp_linear_encoder(conved)
 
         return render_params
@@ -77,27 +79,27 @@ class s_encoder(nn.Module):
             nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            nn.Dropout2d(p=0.2),
-            nn.Conv2d(100, 100, 3, stride=2, padding=1), # b, 100, 3, 3
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
+            # nn.Dropout2d(p=0.4),
+            # nn.Conv2d(100, 100, 3, stride=2, padding=1), # b, 100, 3, 3
+            # nn.ReLU(True),
+            # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.s_linear_encoder = nn.Sequential(
             # nn.Linear(100 *  2 * 2, 100 * 2 * 2),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
+            # # nn.Dropout(p=0.4),
             # nn.Linear(100 *  2 * 2, 100),
             # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            nn.Linear(100 * 2 * 2, state_size), # b, state_size
+            nn.Dropout(p=0.4),
+            nn.Linear(100 * 5 * 5, state_size), # b, state_size
             nn.ReLU(True)
         )
 
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 100 * 2 * 2)
+        conved = conved.reshape(mixed_batch_size, 100 * 5 * 5)
         state = self.s_linear_encoder(conved)
 
         return state
@@ -107,28 +109,28 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 400), # b, 100, 2, 2
-            nn.ReLU(True),
-            # nn.Dropout(p=0.2),
+            # nn.Linear(state_size + rp_size, 100), # b, 100, 2, 2
+            # nn.ReLU(True),
+            # nn.Dropout(p=0.4),
             # nn.Linear(100, 400),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
+            # # nn.Dropout(p=0.4),
             # nn.Linear(400, 400),
             # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
+            # # nn.Dropout(p=0.4),
             # nn.Linear(400, 400),
             # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            nn.Linear(400, 100 * 2 * 2),
+            # nn.Dropout(p=0.4),
+            nn.Linear(state_size + rp_size, 100 * 5 * 5),
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
+            # nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
+            # nn.ReLU(True),
+            nn.ConvTranspose2d(100, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
             nn.ReLU(True),
-            nn.ConvTranspose2d(200, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
-            nn.ReLU(True),
-            nn.Dropout2d(p=0.2),
+            nn.Dropout2d(p=0.4),
             nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
@@ -136,7 +138,7 @@ class Decoder(nn.Module):
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, 100, 2, 2)
+        recon = recon.reshape(mixed_batch_size, 100, 5, 5)
         recon = self.decoder(recon)
         return recon
 
@@ -213,20 +215,20 @@ def main():
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
     # [rp_params.append(x) for x in decoder.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-5)
 
     s_params = [x for x in s_en.parameters()]
     # [s_params.append(x) for x in decoder.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-5)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-5)
 
     # Main loop
     step = 0
     epoch = 0
-    while True:
-        print(step)
+    for _ in range(50000):
+        # print(step)
         # Solver setup
         rp_solver.zero_grad()
         s_solver.zero_grad()
@@ -318,8 +320,12 @@ def main():
         test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
 
         if step % 100 == 0:
-            writer.add_image("test_original", pytorch_to_cv(observations[0]), step)
-            writer.add_image("test_reconstructed", pytorch_to_cv(reconstructed_images[0]), step)
+            writer.add_image("test_original", pytorch_to_cv(test_observations[randint(0,
+                                                                                      mixed_batch_size
+                                                                                      - 1)]), step)
+            writer.add_image("test_reconstructed", pytorch_to_cv(reconstructed_images[randint(0,
+                                                                                              mixed_batch_size
+                                                                                              - 1)]), step)
 
         rp_solver.zero_grad()
         s_solver.zero_grad()
