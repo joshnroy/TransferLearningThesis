@@ -47,18 +47,9 @@ class rp_encoder(nn.Module):
             nn.Conv2d(3, 3, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            # nn.Dropout2d(p=0.2),
-            # nn.Conv2d(3, 3, 3, stride=2, padding=1), # b, 100, 3, 3
-            # nn.ReLU(True),
-            # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.rp_linear_encoder = nn.Sequential(
-            # nn.Linear(100 * 2 * 2, 100 * 2 * 2),
-            # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            # nn.Linear(100 *  2 * 2, 100),
-            # nn.ReLU(True),
             nn.Dropout(p=0.2),
             nn.Linear(3 * 5 * 5, rp_size), # b, rp_size
             nn.ReLU(True)
@@ -79,18 +70,9 @@ class s_encoder(nn.Module):
             nn.Conv2d(3, 20, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-            # nn.Dropout2d(p=0.2),
-            # nn.Conv2d(100, 100, 3, stride=2, padding=1), # b, 100, 3, 3
-            # nn.ReLU(True),
-            # nn.MaxPool2d(2, stride=1), # b, 8, 2, 2
         )
 
         self.s_linear_encoder = nn.Sequential(
-            # nn.Linear(100 *  2 * 2, 100 * 2 * 2),
-            # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
-            # nn.Linear(100 *  2 * 2, 100),
-            # nn.ReLU(True),
             nn.Dropout(p=0.2),
             nn.Linear(20 * 5 * 5, state_size), # b, state_size
             nn.ReLU(True)
@@ -109,25 +91,11 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.linear_decoder = nn.Sequential(
-            # nn.Linear(state_size + rp_size, 100), # b, 100, 2, 2
-            # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
-            # nn.Linear(100, 400),
-            # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
-            # nn.Linear(400, 400),
-            # nn.ReLU(True),
-            # # nn.Dropout(p=0.2),
-            # nn.Linear(400, 400),
-            # nn.ReLU(True),
-            # nn.Dropout(p=0.2),
             nn.Linear(state_size + rp_size, 23 * 5 * 5),
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            # nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
-            # nn.ReLU(True),
             nn.ConvTranspose2d(23, 23, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 23, 23, 15
             nn.ReLU(True),
             nn.Dropout2d(p=0.2),
@@ -214,11 +182,9 @@ def main():
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
-    # [rp_params.append(x) for x in decoder.parameters()]
     rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-4)
 
     s_params = [x for x in s_en.parameters()]
-    # [s_params.append(x) for x in decoder.parameters()]
     s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-4)
 
     d_params = [x for x in decoder.parameters()]
@@ -227,8 +193,7 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(20000):
-        # print(step)
+    for _ in range(50000):
         # Solver setup
         rp_solver.zero_grad()
         s_solver.zero_grad()
@@ -304,13 +269,10 @@ def main():
         loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
 
         # Backward pass and Update
-        # encoding_regularization_loss.backward(retain_graph=True)
 
         loss.backward()
-        # rp_recon_loss.backward(retain_graph=True)
         rp_solver.step()
 
-        # s_recon_loss.backward(retain_graph=True)
         s_solver.step()
 
         d_solver.step()
