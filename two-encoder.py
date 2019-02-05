@@ -76,7 +76,7 @@ class s_encoder(nn.Module):
     def __init__(self):
         super(s_encoder, self).__init__()
         self.s_encoder = nn.Sequential(
-            nn.Conv2d(3, 100, (4, 3), stride=(4, 3)), # b, 200, 20, 15
+            nn.Conv2d(3, 20, (4, 3), stride=(4, 3)), # b, 200, 20, 15
             nn.ReLU(True),
             nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
             # nn.Dropout2d(p=0.2),
@@ -92,14 +92,14 @@ class s_encoder(nn.Module):
             # nn.Linear(100 *  2 * 2, 100),
             # nn.ReLU(True),
             nn.Dropout(p=0.2),
-            nn.Linear(100 * 5 * 5, state_size), # b, state_size
+            nn.Linear(20 * 5 * 5, state_size), # b, state_size
             nn.ReLU(True)
         )
 
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 100 * 5 * 5)
+        conved = conved.reshape(mixed_batch_size, 20 * 5 * 5)
         state = self.s_linear_encoder(conved)
 
         return state
@@ -121,24 +121,24 @@ class Decoder(nn.Module):
             # nn.Linear(400, 400),
             # nn.ReLU(True),
             # nn.Dropout(p=0.2),
-            nn.Linear(state_size + rp_size, 100 * 5 * 5),
+            nn.Linear(state_size + rp_size, 23 * 5 * 5),
             nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
             # nn.ConvTranspose2d(100, 200, 3, stride=2), # b, 200, 5, 5
             # nn.ReLU(True),
-            nn.ConvTranspose2d(100, 100, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 100, 20, 15
+            nn.ConvTranspose2d(23, 23, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 23, 23, 15
             nn.ReLU(True),
             nn.Dropout2d(p=0.2),
-            nn.ConvTranspose2d(100, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
+            nn.ConvTranspose2d(23, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
             nn.Sigmoid()
         )
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, 100, 5, 5)
+        recon = recon.reshape(mixed_batch_size, 23, 5, 5)
         recon = self.decoder(recon)
         return recon
 
@@ -215,19 +215,19 @@ def main():
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
     # [rp_params.append(x) for x in decoder.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-5)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-4)
 
     s_params = [x for x in s_en.parameters()]
     # [s_params.append(x) for x in decoder.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-5)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-4)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-5)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-4)
 
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(50000):
+    for _ in range(20000):
         # print(step)
         # Solver setup
         rp_solver.zero_grad()
