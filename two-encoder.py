@@ -56,37 +56,13 @@ class rp_encoder(nn.Module):
             nn.Linear(10 * 5 * 5, rp_size)
         )
 
-        self.rp_linear_encoder_mu = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, rp_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, rp_size)
-        )
-
-        self.rp_linear_encoder_var = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, rp_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, rp_size)
-        )
-
-    def sample_z(self, mu, log_var):
-        # Using reparameterization trick to sample from a gaussian
-        eps = Variable(torch.randn(batch_size, rp_size)).to(device)
-        return mu + torch.exp(log_var / 2) * eps
-
     def forward (self, x):
         # Encode
         conved = self.rp_encoder(x)
         conved = conved.reshape(mixed_batch_size, 20 * 5 * 5)
-        # render_params = self.rp_linear_encoder(conved)
+        render_params = self.rp_linear_encoder(conved)
 
-        mu = self.rp_linear_encoder_mu(conved)
-        var = self.rp_linear_encoder_mu(conved)
-
-        render_parameters = self.sample_z(mu, var)
-
-        return mu, var, render_parameters
+        return render_params
 
 class s_encoder(nn.Module):
     def __init__(self):
@@ -105,39 +81,13 @@ class s_encoder(nn.Module):
             nn.ReLU(True)
         )
 
-        self.s_linear_encoder_mu = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, state_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, state_size),
-            nn.ReLU(True)
-        )
-
-        self.s_linear_encoder_var = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, state_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, state_size),
-            nn.ReLU(True)
-        )
-
-    def sample_z(self, mu, log_var):
-        # Using reparameterization trick to sample from a gaussian
-        eps = Variable(torch.randn(batch_size, rp_size)).to(device)
-        return mu + torch.exp(log_var / 2) * eps
-
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
         conved = conved.reshape(mixed_batch_size, 20 * 5 * 5)
-        # state = self.s_linear_encoder(conved)
+        state = self.s_linear_encoder(conved)
 
-        mu = self.s_linear_encoder_mu(conved)
-        var = self.s_linear_encoder_var(conved)
-
-        state = self.sample_z(mu, var)
-
-        return mu, var, state
+        return state
 
 class Decoder(nn.Module):
     def __init__(self):
@@ -175,12 +125,9 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, rp_kl_loss, s_recon_loss, s_kl_loss,
-                             test_loss, step):
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step):
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
-    writer.add_scalar("RP KL Loss", rp_kl_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
-    writer.add_scalar("S KL Loss", s_kl_loss, step)
     writer.add_scalar("Train Loss", loss, step)
     writer.add_scalar("Test Loss", test_loss, step)
 
@@ -293,8 +240,8 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        rp_mu, rp_var, render_params = rp_en(observations)
-        s_mu, s_var, state = s_en(observations)
+        render_params = rp_en(observations)
+        state = s_en(observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -318,18 +265,12 @@ def main():
         # Compute Loss
         rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
                                                observations[::2])
-        rp_kl_loss = 0.5 * torch.sum(torch.exp(rp_var) + rp_mu**2 - 1. - rp_var)
         s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
                                               observations[1::2])
-        s_kl_loss = 0.5 * torch.sum(torch.exp(s_var) + s_mu**2 - 1. - s_var)
 
-        encoding_regularization_loss = encoding_regularization_term * torch.var(encoded)
-
-        loss = alpha * (beta * rp_kl_loss + (1. - beta) * rp_recon_loss) + \
-            (1. - alpha) * (beta * s_kl_loss + (1. - beta) * s_recon_loss)
+        loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
 
         # Backward pass and Update
-
         loss.backward()
         rp_solver.step()
 
@@ -343,8 +284,8 @@ def main():
         decoder.eval()
 
         # Forward pass of the network
-        test_rp_mu, test_rp_var,  render_params = rp_en(test_observations)
-        test_s_my, test_s_var, state = s_en(test_observations)
+        render_params = rp_en(test_observations)
+        state = s_en(test_observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -370,8 +311,7 @@ def main():
         decoder.train()
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, rp_recon_loss, rp_kl_loss, s_recon_loss, s_kl_loss,
-                             test_loss, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
