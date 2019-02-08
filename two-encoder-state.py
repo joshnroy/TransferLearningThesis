@@ -26,7 +26,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
 batch_size = 1
-mixed_batch_size = 100
+mixed_batch_size = 50
 state_size = 4
 rp_size = 50
 action_size = 1
@@ -38,6 +38,13 @@ beta = 1e-3
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
 encoding_regularization_term = 1e-2
+
+# Network Hyperparameters
+image_size = 64
+conv_dim = 64
+code_dim = 16
+k_dim = 256
+z_dim = 100
 
 # Network
 class rp_encoder(nn.Module):
@@ -69,22 +76,18 @@ class s_encoder(nn.Module):
         super(s_encoder, self).__init__()
 
         # Compute Encoder layers
-        image_size = 64
-        conv_dim = 64
-        code_dim = 16
-        k_dim = 256
-        z_dim = 256
         layers = []
         layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
         layers.append(nn.BatchNorm2d(conv_dim))
-        layers.append(nn.ReLU())
+        layers.append(nn.ReLU(True))
         
-        repeat_num = int(math.log2(image_size / code_dim))
+        # repeat_num = int(math.log2(image_size / code_dim))
+        repeat_num = 3
         curr_dim = conv_dim
         for i in range(repeat_num):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
-            layers.append(nn.ReLU())
+            layers.append(nn.ReLU(True))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -92,21 +95,28 @@ class s_encoder(nn.Module):
 
         # (code_dim,code_dim,z_dim)
         self.s_encoder = nn.Sequential(*layers)
+        print(self.s_encoder)
 
-        # self.s_encoder = nn.Sequential(
-        #     nn.Conv2d(3, 20, (4, 3), stride=(4, 3)), # b, 200, 20, 15
-        #     nn.ReLU(True),
-        #     nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-        # )
+        old_linear_size = z_dim * 10 * 5
+        new_linear_size = int(np.floor(old_linear_size / 4))
+        linear_layers = []
+        linear_repeat_num = 5
 
-        self.s_linear_encoder = nn.Sequential(
-            nn.Linear(256 * 20 * 11, state_size),
-        )
+        for _ in range(linear_repeat_num):
+            linear_layers.append(nn.Linear(old_linear_size, new_linear_size))
+            linear_layers.append(nn.ReLU(True))
+            old_linear_size = new_linear_size
+            new_linear_size = int(np.floor(old_linear_size / 4))
+
+        linear_layers.append(nn.Linear(old_linear_size, state_size))
+
+        self.s_linear_encoder = nn.Sequential(*linear_layers)
+        print(self.s_linear_encoder)
 
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 256 * 20 * 11)
+        conved = conved.reshape(mixed_batch_size, z_dim * 10 * 5)
         state = self.s_linear_encoder(conved)
 
         return state
@@ -241,6 +251,7 @@ def main():
             mixed_batch[0].append(batch[0][0])
             mixed_batch[1].append(batch[1])
         mixed_batch = (np.array(mixed_batch[0]), np.array(mixed_batch[1]))
+        # print("Got batch")
 
         # Shuffle batches
         # shuffle_rp = np.arange(int(mixed_batch_size / 2))
@@ -262,26 +273,28 @@ def main():
 
         # Forward pass of the network
         # render_params = rp_en(observations)
+        # print("Converted to CUDA")
         state = s_en(observations)
+        # print("Forward Pass done")
         # encoded = torch.cat((render_params, state), 1)
         # reconstructed_images = decoder(encoded)
 
         # assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        if step % 1 == 0:
+        # if step % 1 == 0:
         #     writer.add_image("rp_original", pytorch_to_cv(observations[0]), step)
         #     writer.add_image("rp_reconstructed", pytorch_to_cv(reconstructed_images[0]), step)
-            writer.add_image("s_original", pytorch_to_cv(observations[1]), step)
+            # writer.add_image("s_original", pytorch_to_cv(observations[1]), step)
         #     writer.add_image("s_reconstructed", pytorch_to_cv(reconstructed_images[1]), step)
 
-        if step % 100 == 0:
-            for name, param in rp_en.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
-            for name, param in s_en.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
-            for name, param in decoder.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
-            writer.add_histogram("S", state.clone().cpu().data.numpy(), step)
+        # if step % 100 == 0:
+        #     for name, param in rp_en.named_parameters():
+        #         writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+        #     for name, param in s_en.named_parameters():
+        #         writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+        #     for name, param in decoder.named_parameters():
+        #         writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+        #     writer.add_histogram("S", state.clone().cpu().data.numpy(), step)
 
         # Compute Loss
         # rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
@@ -292,12 +305,15 @@ def main():
         # loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
 
         loss = F.mse_loss(state, true_states)
+        # print("calculated loss")
 
         # Backward pass and Update
         loss.backward()
+        # print("Did backward")
         # rp_solver.step()
 
         s_solver.step()
+        # print("stepped")
 
         # d_solver.step()
 
@@ -334,7 +350,9 @@ def main():
         # decoder.train()
 
         # Tensorboard
+        # print("writing to tensorboard")
         write_to_tensorboard(writer, loss, step)
+        # print("wrote to tensorboard")
         # Save weights
         # TODO: Save when we care about this
 

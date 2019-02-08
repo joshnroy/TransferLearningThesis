@@ -39,21 +39,40 @@ prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
 encoding_regularization_term = 1e-2
 
+# Network Hyperparameters
+image_size = 64
+conv_dim = 64
+code_dim = 16
+k_dim = 256
+z_dim = 256
+
 # Network
 class rp_encoder(nn.Module):
     def __init__(self):
         super(rp_encoder, self).__init__()
-        self.rp_encoder = nn.Sequential(
-            nn.Conv2d(3, 20, (4, 3), stride=(4, 3)), # b, 200, 20, 15
-            nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-        )
+
+        # Compute Encoder layers
+        layers = []
+        layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
+        layers.append(nn.BatchNorm2d(conv_dim))
+        layers.append(nn.ReLU())
+        
+        repeat_num = int(math.log2(image_size / code_dim))
+        curr_dim = conv_dim
+        for i in range(repeat_num):
+            layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
+            layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
+            layers.append(nn.ReLU())
+            curr_dim = conv_dim * (i+2)
+
+        # Now we have (code_dim,code_dim,curr_dim)
+        layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
+
+        # (code_dim,code_dim,z_dim)
+        self.rp_encoder = nn.Sequential(*layers)
 
         self.rp_linear_encoder = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, rp_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, rp_size)
+            nn.Linear(256 * 20 * 11, state_size),
         )
 
     def forward (self, x):
@@ -67,18 +86,29 @@ class rp_encoder(nn.Module):
 class s_encoder(nn.Module):
     def __init__(self):
         super(s_encoder, self).__init__()
-        self.s_encoder = nn.Sequential(
-            nn.Conv2d(3, 20, (4, 3), stride=(4, 3)), # b, 200, 20, 15
-            nn.ReLU(True),
-            nn.MaxPool2d((4, 3), stride=(4, 3)), # b, 200, 5, 5
-        )
+
+        # Compute Encoder layers
+        layers = []
+        layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
+        layers.append(nn.BatchNorm2d(conv_dim))
+        layers.append(nn.ReLU())
+        
+        repeat_num = int(math.log2(image_size / code_dim))
+        curr_dim = conv_dim
+        for i in range(repeat_num):
+            layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
+            layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
+            layers.append(nn.ReLU())
+            curr_dim = conv_dim * (i+2)
+
+        # Now we have (code_dim,code_dim,curr_dim)
+        layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
+
+        # (code_dim,code_dim,z_dim)
+        self.s_encoder = nn.Sequential(*layers)
 
         self.s_linear_encoder = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(20 * 5 * 5, 10 * 5 * 5), # b, state_size
-            nn.ReLU(True),
-            nn.Linear(10 * 5 * 5, state_size),
-            nn.ReLU(True)
+            nn.Linear(256 * 20 * 11, state_size),
         )
 
     def forward (self, x):
