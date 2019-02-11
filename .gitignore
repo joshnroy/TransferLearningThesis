@@ -1,2 +1,4 @@
 training_data/*
+training_data_with_state/*
 test_data/*
+RayResults/*
