@@ -252,7 +252,7 @@ def train_fn(config, reporter):
         s_solver.step()
 
 # Report results
-        reporter(mean_accuracy=0., training_iteration=step)
+        reporter(mean_loss=loss.cpu().detach().numpy(), training_iteration=step)
 
         step += 1
 
@@ -263,11 +263,11 @@ def main():
     all_trials = tune.run_experiments({
         "lr_search": {
             "run": train_fn,
-            "stop": {"training_iteration": 5000},
+            "stop": {"training_iteration": 20000},
             "config": {
                 "lr": tune.grid_search([10 ** x for x in range(-5, 0)]),
             },
-            "trial_resources": {"cpu": 2, "gpu": 0.25},
+            "trial_resources": {"cpu": 4, "gpu": 0.5},
             "local_dir":"~/Documents/Thesis/TransferLearningThesis/RayResults"
         }
         })
