@@ -2,5 +2,5 @@
     "git.ignoreLimitWarning": true,
     "python.jediEnabled": false,
     "python.linting.pylintEnabled": true,
-    "python.pythonPath": "thesis/bin/python"
+    "python.pythonPath": "/home/josh/.pyenv/versions/3.6.7/bin/python"
 }
