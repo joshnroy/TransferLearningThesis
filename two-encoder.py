@@ -44,12 +44,16 @@ image_size = 64
 conv_dim = 64
 code_dim = 16
 k_dim = 256
-z_dim = 256
+z_dim = 100
+curr_dim = None
+
+conv_repeat_num = 3
 
 # Network
 class rp_encoder(nn.Module):
     def __init__(self):
         super(rp_encoder, self).__init__()
+        global curr_dim
 
         # Compute Encoder layers
         layers = []
@@ -57,9 +61,8 @@ class rp_encoder(nn.Module):
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
         
-        repeat_num = int(math.log2(image_size / code_dim))
         curr_dim = conv_dim
-        for i in range(repeat_num):
+        for i in range(conv_repeat_num):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
@@ -72,13 +75,13 @@ class rp_encoder(nn.Module):
         self.rp_encoder = nn.Sequential(*layers)
 
         self.rp_linear_encoder = nn.Sequential(
-            nn.Linear(256 * 20 * 11, state_size),
+            nn.Linear(z_dim * 10 * 5, state_size),
         )
 
     def forward (self, x):
         # Encode
         conved = self.rp_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 20 * 5 * 5)
+        conved = conved.reshape(mixed_batch_size, z_dim * 10 * 5)
         render_params = self.rp_linear_encoder(conved)
 
         return render_params
@@ -86,6 +89,7 @@ class rp_encoder(nn.Module):
 class s_encoder(nn.Module):
     def __init__(self):
         super(s_encoder, self).__init__()
+        global curr_dim
 
         # Compute Encoder layers
         layers = []
@@ -93,9 +97,8 @@ class s_encoder(nn.Module):
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
         
-        repeat_num = int(math.log2(image_size / code_dim))
         curr_dim = conv_dim
-        for i in range(repeat_num):
+        for i in range(conv_repeat_num):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
@@ -108,13 +111,13 @@ class s_encoder(nn.Module):
         self.s_encoder = nn.Sequential(*layers)
 
         self.s_linear_encoder = nn.Sequential(
-            nn.Linear(256 * 20 * 11, state_size),
+            nn.Linear(z_dim * 10 * 5, state_size),
         )
 
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
-        conved = conved.reshape(mixed_batch_size, 20 * 5 * 5)
+        conved = conved.reshape(mixed_batch_size, z_dim * 10 * 5)
         state = self.s_linear_encoder(conved)
 
         return state
@@ -122,26 +125,35 @@ class s_encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
+        global curr_dim
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, 12 * 5 * 5),
+            nn.Linear(state_size + rp_size, int(z_dim / 2 * 10 * 5)),
             nn.ReLU(True),
-            nn.Linear(12 * 5 * 5, 23 * 5 * 5),
+            nn.Linear(int(z_dim / 2 * 10 * 5), z_dim * 10 * 5),
             nn.ReLU(True)
         )
 
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(23, 23, 5, stride=(4, 3), padding=1, output_padding=(1, 0)), # b, 23, 23, 15
-            nn.ReLU(True),
-            nn.Dropout2d(p=0.2),
-            nn.ConvTranspose2d(23, 3, (4, 3), stride=(4, 3), padding=1, output_padding=2), # b, 3, 80, 45
-            nn.Sigmoid()
-        )
+        # Decoder (320 - 256 - 192 - 128 - 64)
+        layers = []
+        layers.append(nn.ConvTranspose2d(z_dim, curr_dim, kernel_size=1))
+        layers.append(nn.BatchNorm2d(curr_dim))
+        layers.append(nn.ReLU())
+                
+        for i in reversed(range(conv_repeat_num)):
+            layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
+            layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
+            layers.append(nn.ReLU())
+            curr_dim = conv_dim * (i+1)
+        
+        layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
+        layers.append(nn.Sigmoid())
+        self.decoder = nn.Sequential(*layers)
 
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, 23, 5, 5)
+        recon = recon.reshape(mixed_batch_size, z_dim,  10, 5)
         recon = self.decoder(recon)
         return recon
 
@@ -192,7 +204,6 @@ def get_batch(starting_batch, ending_batch, batch_size, train):
 
 def main():
     # Setup
-    render_param_loss_term = 1e-3
     RPbatcher = get_batch(2050, 2100, batch_size, True)
     Sbatcher = get_batch(500, 1000, batch_size, True)
     current_batcher = 0
