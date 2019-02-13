@@ -26,6 +26,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 img_size = (45, 80)
 batch_size = 1
 mixed_batch_size = 200
+mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
 state_size = 50
 rp_size = 50
@@ -81,7 +82,7 @@ class rp_encoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.rp_encoder(x)
-        conved = conved.reshape(mixed_batch_size, z_dim * 10 * 5)
+        conved = conved.reshape(mixed_batch_size_per_gpu, z_dim * 10 * 5)
         render_params = self.rp_linear_encoder(conved)
 
         return render_params
@@ -117,7 +118,7 @@ class s_encoder(nn.Module):
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
-        conved = conved.reshape(mixed_batch_size, z_dim * 10 * 5)
+        conved = conved.reshape(mixed_batch_size_per_gpu, z_dim * 10 * 5)
         state = self.s_linear_encoder(conved)
 
         return state
@@ -153,7 +154,7 @@ class Decoder(nn.Module):
     def forward (self, x):
         # Decode
         recon = self.linear_decoder(x)
-        recon = recon.reshape(mixed_batch_size, z_dim,  10, 5)
+        recon = recon.reshape(mixed_batch_size_per_gpu, z_dim,  10, 5)
         recon = self.decoder(recon)
         return recon
 
@@ -213,9 +214,19 @@ def main():
     test_observations = torch.from_numpy(test_observations).to(device)
 
     # Make Networks objects
-    rp_en = rp_encoder().to(device)
-    s_en = s_encoder().to(device)
-    decoder = Decoder().to(device)
+    rp_en = rp_encoder()
+    s_en = s_encoder()
+    decoder = Decoder()
+
+    if torch.cuda.device_count() > 1:
+        rp_en = nn.DataParallel(rp_en)
+        s_en = nn.DataParallel(s_en)
+        decoder = nn.DataParallel(decoder)
+
+    rp_en = rp_en.to(device)
+    s_en = s_en.to(device)
+    decoder = decoder.to(device)
+
 
     rp_en.train()
     s_en.train()
