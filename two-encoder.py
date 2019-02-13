@@ -67,6 +67,7 @@ class rp_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
+            layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -103,6 +104,7 @@ class s_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
+            layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -145,6 +147,7 @@ class Decoder(nn.Module):
             layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
             layers.append(nn.ReLU())
+            layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+1)
         
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
@@ -237,18 +240,18 @@ def main():
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=0.)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-4)
 
     s_params = [x for x in s_en.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=0.)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-4)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=0.)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-4)
 
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(20000):
+    for _ in range(5000):
         print(step)
         # Solver setup
         rp_solver.zero_grad()
