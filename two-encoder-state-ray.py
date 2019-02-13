@@ -19,8 +19,6 @@ import ray.tune as tune
 import gym
 import gym_cartpole_visual
 
-prev_runs = os.listdir("runs/")
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
@@ -267,8 +265,8 @@ def main():
             "config": {
                 "lr": tune.grid_search([10 ** x for x in range(-5, 0)]),
             },
-            "trial_resources": {"cpu": 4, "gpu": 0.5},
-            "local_dir":"~/Documents/Thesis/TransferLearningThesis/RayResults"
+            "trial_resources": {"cpu": 1, "gpu": 1},
+            "local_dir":"~/Documents/Thesis/TransferLearningThesis/TwoGPURayResults"
         }
         })
 
