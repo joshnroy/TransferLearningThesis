@@ -379,12 +379,13 @@ def main():
 
         kl_loss = 0.
         if varational:
-            rp_kl_loss = torch.mean(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2))
-            s_kl_loss = torch.mean(-0.5 * torch.sum(1 + s_var - s_mu**2 - torch.exp(s_var)**2))
+            rp_kl_loss = torch.sum(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2))
+            s_kl_loss = torch.sum(-0.5 * torch.sum(1 + s_var - s_mu**2 - torch.exp(s_var)**2))
             kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
-            loss = beta * kl_loss + (1. - beta) * loss
+            if loss < 0.1:
+                loss = beta * kl_loss + (1. - beta) * loss
 
-            print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
+            # print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
 
         # Backward pass and Update
         loss.backward()
