@@ -382,7 +382,7 @@ def main():
             rp_kl_loss = torch.sum(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2))
             s_kl_loss = torch.sum(-0.5 * torch.sum(1 + s_var - s_mu**2 - torch.exp(s_var)**2))
             kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
-            if loss < 0.1:
+            if loss < 0.05:
                 loss = beta * kl_loss + (1. - beta) * loss
 
             # print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
