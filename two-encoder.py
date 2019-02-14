@@ -52,10 +52,11 @@ conv_repeat_num = 3
 
 varational = True
 
-def sample_z(mu, log_var):
+def sample_z(mu, var):
     # Using reparameterization trick to sample from a gaussian
     eps = Variable(torch.randn(mixed_batch_size_per_gpu, rp_size)).to(device)
-    return mu + torch.exp(log_var / 2) * eps
+    return mu + (var * eps)
+    # return mu + torch.exp(var / 2) * eps
 
 # Network
 class rp_encoder(nn.Module):
