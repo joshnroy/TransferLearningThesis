@@ -302,7 +302,7 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(5000):
+    for _ in range(2000):
         print(step)
         # Solver setup
         rp_solver.zero_grad()
