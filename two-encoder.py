@@ -50,6 +50,13 @@ curr_dim = None
 
 conv_repeat_num = 3
 
+varational = True
+
+def sample_z(mu, log_var):
+    # Using reparameterization trick to sample from a gaussian
+    eps = Variable(torch.randn(mixed_batch_size_per_gpu, rp_size)).to(device)
+    return mu + torch.exp(log_var / 2) * eps
+
 # Network
 class rp_encoder(nn.Module):
     def __init__(self):
@@ -67,7 +74,7 @@ class rp_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2))
+            # layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -80,13 +87,30 @@ class rp_encoder(nn.Module):
             nn.Linear(z_dim * 10 * 5, state_size),
         )
 
+        self.rp_linear_encoder_mu = nn.Sequential(
+            nn.Linear(z_dim * 10 * 5, state_size),
+        )
+
+        self.rp_linear_encoder_var = nn.Sequential(
+            nn.Linear(z_dim * 10 * 5, state_size),
+        )
+
     def forward (self, x):
         # Encode
         conved = self.rp_encoder(x)
         conved = conved.reshape(mixed_batch_size_per_gpu, z_dim * 10 * 5)
-        render_params = self.rp_linear_encoder(conved)
 
-        return render_params
+        render_params = None
+        mu = None
+        var = None
+        if not varational:
+            render_params = self.rp_linear_encoder(conved)
+        else:
+            mu = self.rp_linear_encoder_mu(conved)
+            var = self.rp_linear_encoder_var(conved)
+            render_params = sample_z(mu, var)
+
+        return render_params, mu, var
 
 class s_encoder(nn.Module):
     def __init__(self):
@@ -104,7 +128,7 @@ class s_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2))
+            # layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -117,13 +141,31 @@ class s_encoder(nn.Module):
             nn.Linear(z_dim * 10 * 5, state_size),
         )
 
+        self.s_linear_encoder_mu = nn.Sequential(
+            nn.Linear(z_dim * 10 * 5, state_size),
+        )
+
+        self.s_linear_encoder_var = nn.Sequential(
+            nn.Linear(z_dim * 10 * 5, state_size),
+        )
+
     def forward (self, x):
         # Encode
         conved = self.s_encoder(x)
         conved = conved.reshape(mixed_batch_size_per_gpu, z_dim * 10 * 5)
         state = self.s_linear_encoder(conved)
 
-        return state
+        state = None
+        mu = None
+        var = None
+        if not varational:
+            state = self.s_linear_encoder(conved)
+        else:
+            mu = self.s_linear_encoder_mu(conved)
+            var = self.s_linear_encoder_var(conved)
+            state = sample_z(mu, var)
+
+        return state, mu, var
 
 class Decoder(nn.Module):
     def __init__(self):
@@ -147,7 +189,7 @@ class Decoder(nn.Module):
             layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2))
+            # layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+1)
         
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
@@ -171,9 +213,10 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step):
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step):
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
+    writer.add_scalar("KL Loss", kl_loss, step)
     writer.add_scalar("Train Loss", loss, step)
     writer.add_scalar("Test Loss", test_loss, step)
 
@@ -295,8 +338,8 @@ def main():
         observations = torch.from_numpy(observations).to(device)
 
         # Forward pass of the network
-        render_params = rp_en(observations)
-        state = s_en(observations)
+        render_params, rp_mu, rp_var = rp_en(observations)
+        state, s_mu, s_var = s_en(observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -325,6 +368,13 @@ def main():
 
         loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
 
+        kl_loss = 0.
+        if varational:
+            rp_kl_loss = 0.5 * torch.sum(torch.exp(rp_var) + rp_mu**2 - 1. - rp_var)
+            s_kl_loss = 0.5 * torch.sum(torch.exp(s_var) + s_mu**2 - 1. - s_var)
+            kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
+            loss = beta * kl_loss + (1. - beta) * loss
+
         # Backward pass and Update
         loss.backward()
         rp_solver.step()
@@ -339,8 +389,8 @@ def main():
         decoder.eval()
 
         # Forward pass of the network
-        render_params = rp_en(test_observations)
-        state = s_en(test_observations)
+        render_params, _, _ = rp_en(test_observations)
+        state, _, _ = s_en(test_observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -366,7 +416,7 @@ def main():
         decoder.train()
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, test_loss, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
