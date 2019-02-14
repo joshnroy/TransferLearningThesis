@@ -55,7 +55,6 @@ varational = True
 def sample_z(mu, var):
     # Using reparameterization trick to sample from a gaussian
     eps = Variable(torch.randn(mixed_batch_size_per_gpu, rp_size)).to(mu.get_device())
-    print(mu.get_device(), var.get_device(), eps.get_device())
     return mu + (torch.exp(var) * eps)
     # return mu + torch.exp(var / 2) * eps
 
