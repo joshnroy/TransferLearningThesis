@@ -55,7 +55,7 @@ varational = True
 def sample_z(mu, var):
     # Using reparameterization trick to sample from a gaussian
     eps = Variable(torch.randn(mixed_batch_size_per_gpu, rp_size)).to(device)
-    return mu + (var * eps)
+    return mu + (torch.exp(var) * eps)
     # return mu + torch.exp(var / 2) * eps
 
 # Network
@@ -69,7 +69,7 @@ class rp_encoder(nn.Module):
         layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
-        
+
         curr_dim = conv_dim
         for i in range(conv_repeat_num):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
@@ -86,14 +86,17 @@ class rp_encoder(nn.Module):
 
         self.rp_linear_encoder = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
         self.rp_linear_encoder_mu = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
         self.rp_linear_encoder_var = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
     def forward (self, x):
@@ -123,7 +126,7 @@ class s_encoder(nn.Module):
         layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
-        
+
         curr_dim = conv_dim
         for i in range(conv_repeat_num):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
@@ -140,14 +143,17 @@ class s_encoder(nn.Module):
 
         self.s_linear_encoder = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
         self.s_linear_encoder_mu = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
         self.s_linear_encoder_var = nn.Sequential(
             nn.Linear(z_dim * 10 * 5, state_size),
+            nn.ReLU(True)
         )
 
     def forward (self, x):
@@ -185,14 +191,14 @@ class Decoder(nn.Module):
         layers.append(nn.ConvTranspose2d(z_dim, curr_dim, kernel_size=1))
         layers.append(nn.BatchNorm2d(curr_dim))
         layers.append(nn.ReLU())
-                
+
         for i in reversed(range(conv_repeat_num)):
             layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
             layers.append(nn.ReLU())
             # layers.append(nn.Dropout2d(p=0.2))
             curr_dim = conv_dim * (i+1)
-        
+
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
         layers.append(nn.Sigmoid())
         self.decoder = nn.Sequential(*layers)
@@ -345,6 +351,8 @@ def main():
         reconstructed_images = decoder(encoded)
 
         assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
+        assert (rp_var >= 0.).all()
+        assert (s_var >= 0.).all()
 
         if step % 100 == 0:
             writer.add_image("rp_original", pytorch_to_cv(observations[0]), step)
@@ -371,12 +379,12 @@ def main():
 
         kl_loss = 0.
         if varational:
-            rp_kl_loss = 0.5 * torch.sum(rp_mu**2 + rp_var**2 - torch.log(rp_var) - 1)
-            s_kl_loss = 0.5 * torch.sum(s_mu**2 + s_var**2 - torch.log(s_var) - 1)
-            # rp_kl_loss = 0.5 * torch.sum(torch.exp(rp_var) + rp_mu**2 - 1. - rp_var)
-            # s_kl_loss = 0.5 * torch.sum(torch.exp(s_var) + s_mu**2 - 1. - s_var)
+            rp_kl_loss = torch.mean(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2))
+            s_kl_loss = torch.mean(-0.5 * torch.sum(1 + s_var - s_mu**2 - torch.exp(s_var)**2))
             kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
             loss = beta * kl_loss + (1. - beta) * loss
+
+            print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
 
         # Backward pass and Update
         loss.backward()
@@ -423,7 +431,7 @@ def main():
         # Save weights
         # TODO: Save when we care about this
 
-        step += 1    
+        step += 1
 
 if __name__ == "__main__":
     main()
