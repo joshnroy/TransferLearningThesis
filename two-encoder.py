@@ -287,17 +287,16 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
-    kl_enabled = False
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-4)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-2)
 
     s_params = [x for x in s_en.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-4)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-2)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-4)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-2)
 
     # Main loop
     step = 0
