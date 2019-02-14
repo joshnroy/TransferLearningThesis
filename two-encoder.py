@@ -35,7 +35,7 @@ image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
-beta = 0.5
+beta = 1.
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
 encoding_regularization_term = 1e-2
@@ -290,18 +290,18 @@ def main():
 
     # Set solver
     rp_params = [x for x in rp_en.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=1e-2)
+    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=0.)
 
     s_params = [x for x in s_en.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=1e-2)
+    s_solver = optim.Adam(s_params, lr=lr, weight_decay=0.)
 
     d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=1e-2)
+    d_solver = optim.Adam(d_params, lr=lr, weight_decay=0.)
 
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(2000):
+    while True:
         print(step)
         # Solver setup
         rp_solver.zero_grad()
