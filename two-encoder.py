@@ -45,7 +45,7 @@ image_size = 64
 conv_dim = 64
 code_dim = 16
 k_dim = 256
-z_dim = 100
+z_dim = 200
 curr_dim = None
 
 conv_repeat_num = 3
@@ -370,8 +370,10 @@ def main():
 
         kl_loss = 0.
         if varational:
-            rp_kl_loss = 0.5 * torch.sum(torch.exp(rp_var) + rp_mu**2 - 1. - rp_var)
-            s_kl_loss = 0.5 * torch.sum(torch.exp(s_var) + s_mu**2 - 1. - s_var)
+            rp_kl_loss = 0.5 * torch.sum(rp_mu**2 + rp_var**2 - torch.log(rp_var) - 1)
+            s_kl_loss = 0.5 * torch.sum(s_mu**2 + s_var**2 - torch.log(s_var) - 1)
+            # rp_kl_loss = 0.5 * torch.sum(torch.exp(rp_var) + rp_mu**2 - 1. - rp_var)
+            # s_kl_loss = 0.5 * torch.sum(torch.exp(s_var) + s_mu**2 - 1. - s_var)
             kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
             loss = beta * kl_loss + (1. - beta) * loss
 
