@@ -18,7 +18,7 @@ import gym_cartpole_visual
 
 prev_runs = os.listdir("runs/")
 
-trial_num = max(int(prev_runs[5:])) + 1
+trial_num = max([int(x[5:]) for x in prev_runs]) + 1
 
 writer = SummaryWriter("runs/trial" + str(trial_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -28,8 +28,8 @@ batch_size = 1
 mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
-state_size = 4
-rp_size = 100
+state_size = 100
+rp_size = 4
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
