@@ -18,7 +18,7 @@ import gym_cartpole_visual
 
 prev_runs = os.listdir("runs/")
 
-trial_num = int(max(prev_runs)[5]) + 1
+trial_num = max(int(prev_runs[5:])) + 1
 
 writer = SummaryWriter("runs/trial" + str(trial_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -37,7 +37,6 @@ action_dimension = 2
 alpha = 0.5
 beta = 0.8
 prediction_loss_term = 0.
-reconstruction_weight_term = 0.5
 
 # Network Hyperparameters
 image_size = 64
