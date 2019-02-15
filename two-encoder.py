@@ -34,7 +34,8 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
-alpha = 0.5
+alpha = 0.5 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"]) / 10.
+print("alpha", alpha)
 beta = 0.8
 prediction_loss_term = 0.
 
