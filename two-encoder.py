@@ -34,7 +34,7 @@ action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
-alpha = 0.8
+alpha = 0.5
 beta = 0.99
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
