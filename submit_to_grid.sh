@@ -1,4 +1,4 @@
 #!/bin/bash
 
 git pull
-qsub -cwd -l long -l gpus=2 run_grid.sh
+qsub -t 1-9 -cwd -l short -l gpus=2 run_grid.sh
