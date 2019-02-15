@@ -288,15 +288,15 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
-    noise_scalar = 1e-2
+    noise_scalar = 0.
     weight_decay = 1e-4
 
     # Set solver
-    rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=1e-4)
+    rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay)
 
-    s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=1e-4)
+    s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=weight_decay)
 
-    d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=1e-4)
+    d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=weight_decay)
 
     # Main loop
     step = 0
