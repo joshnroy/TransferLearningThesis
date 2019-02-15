@@ -28,8 +28,8 @@ batch_size = 1
 mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
-state_size = 100
-rp_size = 4
+state_size = 4
+rp_size = 100
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
@@ -287,7 +287,7 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
-    noise_scalar = 0.
+    noise_scalar = 5. * 1e-2
     weight_decay = 1e-4
 
     # Set solver
