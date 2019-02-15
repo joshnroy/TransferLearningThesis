@@ -28,17 +28,16 @@ batch_size = 1
 mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
-state_size = 50
-rp_size = 50
+state_size = 4
+rp_size = 100
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
-alpha = 0.5
-beta = 0.8
+alpha = 0.8
+beta = 0.99
 prediction_loss_term = 0.
 reconstruction_weight_term = 0.5
-encoding_regularization_term = 1e-2
 
 # Network Hyperparameters
 image_size = 64
@@ -54,7 +53,7 @@ varational = True
 
 def sample_z(mu, var):
     # Using reparameterization trick to sample from a gaussian
-    eps = Variable(torch.randn(mixed_batch_size_per_gpu, rp_size)).to(mu.get_device())
+    eps = Variable(torch.randn_like(mu)).to(mu.get_device())
     return mu + (torch.exp(var) * eps)
     # return mu + torch.exp(var / 2) * eps
 
@@ -85,17 +84,17 @@ class rp_encoder(nn.Module):
         self.rp_encoder = nn.Sequential(*layers)
 
         self.rp_linear_encoder = nn.Sequential(
-            nn.Linear(z_dim * 10 * 5, state_size),
+            nn.Linear(z_dim * 10 * 5, rp_size),
             nn.ReLU(True)
         )
 
         self.rp_linear_encoder_mu = nn.Sequential(
-            nn.Linear(z_dim * 10 * 5, state_size),
+            nn.Linear(z_dim * 10 * 5, rp_size),
             nn.ReLU(True)
         )
 
         self.rp_linear_encoder_var = nn.Sequential(
-            nn.Linear(z_dim * 10 * 5, state_size),
+            nn.Linear(z_dim * 10 * 5, rp_size),
             nn.ReLU(True)
         )
 
@@ -180,7 +179,9 @@ class Decoder(nn.Module):
         global curr_dim
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, int(z_dim / 2 * 10 * 5)),
+            nn.Linear(state_size + rp_size, int(z_dim / 4 * 10 * 5)),
+            nn.ReLU(True),
+            nn.Linear(int(z_dim / 4 * 10 * 5), int(z_dim / 2 * 10 * 5)),
             nn.ReLU(True),
             nn.Linear(int(z_dim / 2 * 10 * 5), z_dim * 10 * 5),
             nn.ReLU(True)
@@ -287,21 +288,20 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
+    noise_scalar = 1e-2
+    weight_decay = 1e-4
 
     # Set solver
-    rp_params = [x for x in rp_en.parameters()]
-    rp_solver = optim.Adam(rp_params, lr=lr, weight_decay=0.)
+    rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=1e-4)
 
-    s_params = [x for x in s_en.parameters()]
-    s_solver = optim.Adam(s_params, lr=lr, weight_decay=0.)
+    s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=1e-4)
 
-    d_params = [x for x in decoder.parameters()]
-    d_solver = optim.Adam(d_params, lr=lr, weight_decay=0.)
+    d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=1e-4)
 
     # Main loop
     step = 0
     epoch = 0
-    while True:
+    for _ in range(2000):
         print(step)
         # Solver setup
         rp_solver.zero_grad()
@@ -343,6 +343,7 @@ def main():
 
         observations = normalize_observation(observations).astype(np.float32)
         observations = torch.from_numpy(observations).to(device)
+        observations = torch.clamp(observations + torch.randn_like(observations) * noise_scalar, min=0., max=1.)
 
         # Forward pass of the network
         render_params, rp_mu, rp_var = rp_en(observations)
@@ -382,9 +383,11 @@ def main():
             rp_kl_loss = torch.mean(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2, dim=0))
             s_kl_loss = torch.mean(-0.5 * torch.sum(1 + rp_var - rp_mu**2 - torch.exp(rp_var)**2, dim=0))
             kl_loss = alpha * rp_kl_loss + (1. - alpha) * s_kl_loss
+            assert(kl_loss >= 0.)
             loss = beta * kl_loss + (1. - beta) * loss
 
             # print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
+        assert (loss >= 0.)
 
         # Backward pass and Update
         loss.backward()
