@@ -35,7 +35,7 @@ image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
-print("alpha", alpha)
+print("rp_size", rp_size)
 print("trial_num", trial_num)
 beta = 0.8
 prediction_loss_term = 0.
