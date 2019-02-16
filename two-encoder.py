@@ -35,7 +35,6 @@ image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
-print("rp_size", rp_size)
 print("trial_num", trial_num)
 beta = 0.8
 prediction_loss_term = 0.
@@ -291,6 +290,8 @@ def main():
     lr = 1e-4
     noise_scalar = 0. if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]) * 1e-2)
     weight_decay = 1e-4
+
+    print("noise scalar", noise_scalar)
 
     # Set solver
     rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay)
