@@ -48,6 +48,7 @@ z_dim = 200
 curr_dim = None
 
 conv_repeat_num = 3
+dropout_prob = 0.5
 
 varational = True
 
@@ -74,7 +75,7 @@ class rp_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2, inplace=True))
+            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -131,7 +132,7 @@ class s_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2, inplace=True))
+            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
         # Now we have (code_dim,code_dim,curr_dim)
@@ -197,7 +198,7 @@ class Decoder(nn.Module):
             layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=0.2, inplace=True))
+            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+1)
 
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
@@ -287,9 +288,9 @@ def main():
     decoder.train()
 
     # lr = 1e-2
-    lr = 1e-3
+    lr = 1e-4
     noise_scalar = 0. if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]) * 1e-2)
-    weight_decay = 1e-2
+    weight_decay = 0.
 
     print("noise scalar", noise_scalar)
 
@@ -303,7 +304,7 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(5000):
+    for _ in range(50000):
         print(step)
         # Solver setup
         rp_solver.zero_grad()
@@ -388,7 +389,6 @@ def main():
             assert(kl_loss >= 0.)
             loss = beta * kl_loss + (1. - beta) * loss
 
-            # print(rp_kl_loss.cpu().detach().numpy(), s_kl_loss.cpu().detach().numpy())
         assert (loss >= 0.)
 
         # Backward pass and Update
