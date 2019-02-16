@@ -29,13 +29,14 @@ mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
 state_size = 4
-rp_size = 4
+rp_size = 10 if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]))
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
 print("trial_num", trial_num)
+print("rp_size", rp_size)
 beta = 0.8
 prediction_loss_term = 0.
 
@@ -44,11 +45,11 @@ image_size = 64
 conv_dim = 64
 code_dim = 16
 k_dim = 256
-z_dim = 200
+z_dim = 100
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.5
+dropout_prob = 0.8
 
 varational = True
 
@@ -289,11 +290,8 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
-    noise_scalar = 0. if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]) * 1e-2)
+    noise_scalar = 0.
     weight_decay = 0.
-
-    print("noise scalar", noise_scalar)
-
     # Set solver
     rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay)
 
