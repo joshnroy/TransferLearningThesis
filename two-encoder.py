@@ -289,7 +289,7 @@ def main():
 
     # lr = 1e-2
     lr = 1e-4
-    noise_scalar = 5. * 1e-2
+    noise_scalar = 0.
     weight_decay = 1e-4
 
     # Set solver
