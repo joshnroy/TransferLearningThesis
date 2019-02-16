@@ -48,7 +48,7 @@ z_dim = 200
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.
+dropout_prob = 0.5
 
 varational = True
 
