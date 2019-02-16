@@ -287,7 +287,7 @@ def main():
     decoder.train()
 
     # lr = 1e-2
-    lr = 1e-4
+    lr = 1e-3
     noise_scalar = 0. if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]) * 1e-2)
     weight_decay = 1e-2
 
