@@ -36,7 +36,6 @@ action_dimension = 2
 
 alpha = 0.5
 print("trial_num", trial_num)
-print("rp_size", rp_size)
 beta = 0.8
 prediction_loss_term = 0.
 
@@ -242,12 +241,12 @@ def pytorch_to_cv(img):
 
     return img_channels
 
-def get_batch(starting_batch, ending_batch, batch_size, train):
+def get_batch(starting_batch, ending_batch, batch_size, train, filename):
     data_iter = starting_batch
     while data_iter <= ending_batch:
         data = None
         if train:
-            data = np.load("training_data/training_data_" + str(data_iter) + ".npy")
+            data = np.load(filename + str(data_iter) + ".npy")
         else:
             data = np.load("test_data/test_data_" + str(data_iter) + ".npy")
         i = 0
@@ -261,8 +260,8 @@ def get_batch(starting_batch, ending_batch, batch_size, train):
 
 def main():
     # Setup
-    RPbatcher = get_batch(2050, 2100, batch_size, True)
-    Sbatcher = get_batch(500, 1000, batch_size, True)
+    RPbatcher = get_batch(0, 5000, batch_size, True, "rp_training_data/rp_training_data_")
+    Sbatcher = get_batch(0, 5000, batch_size, True, "state_training_data/state_training_data_")
     current_batcher = 0
     test_batcher = get_batch(500, 1000, mixed_batch_size, False)
     test_observations, test_actions = next(test_batcher)
@@ -292,12 +291,16 @@ def main():
     lr = 1e-4
     noise_scalar = 0.
     weight_decay = 0.
+
     # Set solver
     rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay)
 
     s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=weight_decay)
 
     d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=weight_decay)
+
+    print(np.sum(p.numel() for p in rp_en.parameters() if p.requires_grad), np.sum(p.numel() for p in s_en.parameters() if p.requires_grad), np.sum(p.numel() for p in decoder.parameters() if p.requires_grad))
+    sys.exit()
 
     # Main loop
     step = 0
