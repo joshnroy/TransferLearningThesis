@@ -197,8 +197,8 @@ class Decoder(nn.Module):
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
         layers.append(nn.Sigmoid())
         self.decoder = nn.Sequential(*layers)
-        print(self.decoder)
-        sys.exit()
+        # print(self.decoder)
+        # sys.exit()
 
     def forward (self, x):
         # Decode
