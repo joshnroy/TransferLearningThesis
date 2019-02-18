@@ -29,7 +29,7 @@ mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
 state_size = 4
-rp_size = 100 if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]))
+rp_size = 100
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
@@ -48,7 +48,7 @@ z_dim = 100
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.
+dropout_prob = 0. if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.1)
 
 varational = True
 
