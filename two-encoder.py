@@ -40,15 +40,12 @@ beta = 0.8
 prediction_loss_term = 0.
 
 # Network Hyperparameters
-image_size = 64
-conv_dim = 64
-code_dim = 16
-k_dim = 256
-z_dim = 100
+conv_dim = 4
+z_dim = 3
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0. if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.1)
+dropout_prob = 0.2 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.1)
 
 varational = True
 
@@ -78,10 +75,8 @@ class rp_encoder(nn.Module):
             layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
-        # Now we have (code_dim,code_dim,curr_dim)
         layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
 
-        # (code_dim,code_dim,z_dim)
         self.rp_encoder = nn.Sequential(*layers)
 
         self.rp_linear_encoder = nn.Sequential(
@@ -135,10 +130,8 @@ class s_encoder(nn.Module):
             layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
-        # Now we have (code_dim,code_dim,curr_dim)
         layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
 
-        # (code_dim,code_dim,z_dim)
         self.s_encoder = nn.Sequential(*layers)
 
         self.s_linear_encoder = nn.Sequential(
@@ -180,12 +173,12 @@ class Decoder(nn.Module):
         global curr_dim
 
         self.linear_decoder = nn.Sequential(
-            nn.Linear(state_size + rp_size, int(z_dim / 4 * 10 * 5)),
+            nn.Linear(state_size + rp_size, int(z_dim * 10 * 5)),
             nn.ReLU(True),
-            nn.Linear(int(z_dim / 4 * 10 * 5), int(z_dim / 2 * 10 * 5)),
-            nn.ReLU(True),
-            nn.Linear(int(z_dim / 2 * 10 * 5), z_dim * 10 * 5),
-            nn.ReLU(True)
+            # nn.Linear(int(z_dim / 4 * 10 * 5), int(z_dim / 2 * 10 * 5)),
+            # nn.ReLU(True),
+            # nn.Linear(int(z_dim / 2 * 10 * 5), z_dim * 10 * 5),
+            # nn.ReLU(True)
         )
 
         # Decoder (320 - 256 - 192 - 128 - 64)
@@ -204,6 +197,8 @@ class Decoder(nn.Module):
         layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
         layers.append(nn.Sigmoid())
         self.decoder = nn.Sequential(*layers)
+        print(self.decoder)
+        sys.exit()
 
     def forward (self, x):
         # Decode
@@ -305,8 +300,9 @@ def main():
     # Main loop
     step = 0
     epoch = 0
-    for _ in range(5000):
-        print(step)
+    while True:
+        if step % 50 == 0:
+            print(step)
 
         # Solver setup
         rp_solver.zero_grad()
