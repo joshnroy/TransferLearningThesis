@@ -4,3 +4,6 @@ test_data/*
 RayResults/*
 thesis/*
 src/*
+rp_training_data/*
+state_training_data/*
+*.npy

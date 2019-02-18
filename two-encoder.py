@@ -29,7 +29,7 @@ mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
 test_batch_size = 100
 state_size = 4
-rp_size = 10 if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]))
+rp_size = 100 if "SGE_TASK_ID" not in os.environ else int(float(os.environ["SGE_TASK_ID"]))
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
@@ -48,7 +48,7 @@ z_dim = 100
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.8
+dropout_prob = 0.
 
 varational = True
 
@@ -260,10 +260,10 @@ def get_batch(starting_batch, ending_batch, batch_size, train, filename):
 
 def main():
     # Setup
-    RPbatcher = get_batch(0, 5000, batch_size, True, "rp_training_data/rp_training_data_")
-    Sbatcher = get_batch(0, 5000, batch_size, True, "state_training_data/state_training_data_")
+    RPbatcher = get_batch(500, 20000, batch_size, True, "rp_training_data/rp_training_data_")
+    Sbatcher = get_batch(500, 20000, batch_size, True, "state_training_data/state_training_data_")
     current_batcher = 0
-    test_batcher = get_batch(500, 1000, mixed_batch_size, False)
+    test_batcher = get_batch(500, 1000, mixed_batch_size, False, None)
     test_observations, test_actions = next(test_batcher)
     test_observations = normalize_observation(test_observations).astype(np.float32)
     test_observations = torch.from_numpy(test_observations).to(device)
@@ -299,14 +299,15 @@ def main():
 
     d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=weight_decay)
 
-    print(np.sum(p.numel() for p in rp_en.parameters() if p.requires_grad), np.sum(p.numel() for p in s_en.parameters() if p.requires_grad), np.sum(p.numel() for p in decoder.parameters() if p.requires_grad))
-    sys.exit()
+    # print(np.sum(p.numel() for p in rp_en.parameters() if p.requires_grad), np.sum(p.numel() for p in s_en.parameters() if p.requires_grad), np.sum(p.numel() for p in decoder.parameters() if p.requires_grad))
+    # sys.exit()
 
     # Main loop
     step = 0
     epoch = 0
     for _ in range(5000):
         print(step)
+
         # Solver setup
         rp_solver.zero_grad()
         s_solver.zero_grad()
@@ -318,14 +319,14 @@ def main():
                 batch = next(RPbatcher)
                 if batch is None:
                     epoch += 1
-                    RPbatcher = get_batch(2050, 2100, batch_size, True)
+                    RPbatcher = get_batch(500, 20000, batch_size, True, "rp_training_data/rp_training_data_")
                     batch = next(RPbatcher)
                 current_batcher = 1
             elif current_batcher == 1:
                 batch = next(Sbatcher)
                 if batch is None:
                     epoch += 1
-                    Sbatcher = get_batch(500, 1000, batch_size, True)
+                    Sbatcher = get_batch(500, 20000, batch_size, True, "state_training_data/state_training_data_")
                     batch = next(Sbatcher)
                 current_batcher = 0
             mixed_batch[0].append(batch[0][0])

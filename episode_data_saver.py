@@ -5,17 +5,17 @@ import numpy as np
     
 from pyvirtualdisplay import Display
 
-# display = Display(visible=0, size=(100, 100))
-# display.start()
+display = Display(visible=0, size=(100, 100))
+display.start()
 
 array = []
 env = gym.make("cartpole-visual-v1")
-for i_episode in range(0, 5001):
+for i_episode in range(10001, 20001):
     observation, state = env.reset()
-    for t in range(100):
+    for t in range(1000):
         action = env.action_space.sample()
-        observation_flat = observation[0].flatten()
-        array.append(np.concatenate([observation_flat, state]))
+        observation_flat = observation.flatten()
+        array.append(np.insert(observation_flat, 0, action))
         del observation
         del observation_flat
         observation, state, reward, done, info = env.step(action)
