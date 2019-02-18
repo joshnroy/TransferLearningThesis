@@ -19,6 +19,7 @@ import gym_cartpole_visual
 prev_runs = os.listdir("runs/")
 
 trial_num = max([int(x[5:]) for x in prev_runs]) + 1
+num_gpus = torch.cuda.device_count()
 
 writer = SummaryWriter("runs/trial" + str(trial_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -26,7 +27,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 img_size = (45, 80)
 batch_size = 1
 mixed_batch_size = 200
-mixed_batch_size_per_gpu = int(mixed_batch_size / torch.cuda.device_count())
+mixed_batch_size_per_gpu = int(mixed_batch_size / num_gpus)
 test_batch_size = 100
 state_size = 4
 rp_size = 100
@@ -175,10 +176,10 @@ class Decoder(nn.Module):
         self.linear_decoder = nn.Sequential(
             nn.Linear(state_size + rp_size, int(z_dim * 10 * 5)),
             nn.ReLU(True),
-            # nn.Linear(int(z_dim / 4 * 10 * 5), int(z_dim / 2 * 10 * 5)),
-            # nn.ReLU(True),
-            # nn.Linear(int(z_dim / 2 * 10 * 5), z_dim * 10 * 5),
-            # nn.ReLU(True)
+            nn.Linear(int(z_dim * 10 * 5), int(z_dim * 10 * 5)),
+            nn.ReLU(True),
+            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            nn.ReLU(True)
         )
 
         # Decoder (320 - 256 - 192 - 128 - 64)
@@ -255,8 +256,8 @@ def get_batch(starting_batch, ending_batch, batch_size, train, filename):
 
 def main():
     # Setup
-    RPbatcher = get_batch(500, 20000, batch_size, True, "rp_training_data/rp_training_data_")
-    Sbatcher = get_batch(500, 20000, batch_size, True, "state_training_data/state_training_data_")
+    RPbatcher = get_batch(500, 20000, batch_size, True, "rp_training_data/rp_training_data_" if num_gpus <= 1 else "/data/jroy1/rp_training_data/rp_training_data_")
+    Sbatcher = get_batch(500, 20000, batch_size, True, "state_training_data/state_training_data_" if num_gpus <= 1 else "/data/jroy1/state_training_data/state_training_data_")
     current_batcher = 0
     test_batcher = get_batch(500, 1000, mixed_batch_size, False, None)
     test_observations, test_actions = next(test_batcher)
@@ -268,7 +269,7 @@ def main():
     s_en = s_encoder()
     decoder = Decoder()
 
-    if torch.cuda.device_count() > 1:
+    if num_gpus > 1:
         rp_en = nn.DataParallel(rp_en)
         s_en = nn.DataParallel(s_en)
         decoder = nn.DataParallel(decoder)
