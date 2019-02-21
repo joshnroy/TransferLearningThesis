@@ -312,7 +312,7 @@ def main():
     step = 0
     epoch = 0
     test_loss = 0.
-    while True:
+    for _ in range(50000):
         if step % 50 == 0:
             print(step)
 
