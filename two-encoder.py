@@ -46,7 +46,7 @@ z_dim = 3
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
+dropout_prob = 0.01 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
 
 varational = True
 
@@ -311,7 +311,7 @@ def main():
     step = 0
     epoch = 0
     test_loss = 0.
-    while True:
+    for _ in range(30000):
         if step % 50 == 0:
             print(step)
 
