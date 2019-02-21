@@ -178,14 +178,14 @@ class Decoder(nn.Module):
         self.linear_decoder = nn.Sequential(
             nn.Linear(state_size + rp_size, int(z_dim * 10 * 5)),
             nn.ReLU(True),
-            nn.Linear(int(z_dim * 10 * 5), int(z_dim * 10 * 5)),
-            nn.ReLU(True),
-            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            nn.ReLU(True),
-            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            nn.ReLU(True),
-            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            nn.ReLU(True),
+            # nn.Linear(int(z_dim * 10 * 5), int(z_dim * 10 * 5)),
+            # nn.ReLU(True),
+            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            # nn.ReLU(True),
+            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            # nn.ReLU(True),
+            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            # nn.ReLU(True),
         )
 
         # Decoder (320 - 256 - 192 - 128 - 64)
