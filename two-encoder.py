@@ -46,7 +46,7 @@ z_dim = 3
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.2 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.1)
+dropout_prob = 0 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
 
 varational = True
 
@@ -179,7 +179,11 @@ class Decoder(nn.Module):
             nn.Linear(int(z_dim * 10 * 5), int(z_dim * 10 * 5)),
             nn.ReLU(True),
             nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            nn.ReLU(True)
+            nn.ReLU(True),
+            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            nn.ReLU(True),
+            nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
+            nn.ReLU(True),
         )
 
         # Decoder (320 - 256 - 192 - 128 - 64)
@@ -219,6 +223,11 @@ def normalize_observation(observation):
     return observation
 
 def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step):
+    loss = loss.cpu().detach().numpy()
+    rp_recon_loss = rp_recon_loss.cpu().detach().numpy()
+    s_recon_loss = s_recon_loss.cpu().detach().numpy()
+    kl_loss = kl_loss.cpu().detach().numpy()
+    test_loss = test_loss.cpu().detach().numpy()
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
     writer.add_scalar("KL Loss", kl_loss, step)
@@ -301,6 +310,7 @@ def main():
     # Main loop
     step = 0
     epoch = 0
+    test_loss = 0.
     while True:
         if step % 50 == 0:
             print(step)
@@ -399,36 +409,37 @@ def main():
         d_solver.step()
 
         # Test the model
-        rp_en.eval()
-        s_en.eval()
-        decoder.eval()
+        if step % 50 == 0:
+            rp_en.eval()
+            s_en.eval()
+            decoder.eval()
 
-        # Forward pass of the network
-        render_params, _, _ = rp_en(test_observations)
-        state, _, _ = s_en(test_observations)
-        encoded = torch.cat((render_params, state), 1)
-        reconstructed_images = decoder(encoded)
+            # Forward pass of the network
+            render_params, _, _ = rp_en(test_observations)
+            state, _, _ = s_en(test_observations)
+            encoded = torch.cat((render_params, state), 1)
+            reconstructed_images = decoder(encoded)
 
-        # Compute Loss
-        assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
+            # Compute Loss
+            assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-        test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
+            test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
 
-        if step % 100 == 0:
-            writer.add_image("test_original", pytorch_to_cv(test_observations[randint(0,
-                                                                                      mixed_batch_size
-                                                                                      - 1)]), step)
-            writer.add_image("test_reconstructed", pytorch_to_cv(reconstructed_images[randint(0,
-                                                                                              mixed_batch_size
-                                                                                              - 1)]), step)
+            if step % 100 == 0:
+                writer.add_image("test_original", pytorch_to_cv(test_observations[randint(0,
+                                                                                          mixed_batch_size
+                                                                                          - 1)]), step)
+                writer.add_image("test_reconstructed", pytorch_to_cv(reconstructed_images[randint(0,
+                                                                                                  mixed_batch_size
+                                                                                                  - 1)]), step)
 
-        rp_solver.zero_grad()
-        s_solver.zero_grad()
-        d_solver.zero_grad()
+            rp_solver.zero_grad()
+            s_solver.zero_grad()
+            d_solver.zero_grad()
 
-        rp_en.train()
-        s_en.train()
-        decoder.train()
+            rp_en.train()
+            s_en.train()
+            decoder.train()
 
         # Tensorboard
         write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step)
