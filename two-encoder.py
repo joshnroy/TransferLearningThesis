@@ -30,23 +30,25 @@ mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / num_gpus)
 test_batch_size = 100
 state_size = 4
-rp_size = 100
+rp_size = 12
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
-print("trial_num", trial_num)
 beta = 0.8
 prediction_loss_term = 0.
+mse_loss_scalar = 0.5
+
+print("trial_num", trial_num)
 
 # Network Hyperparameters
 conv_dim = 4
-z_dim = 3
+z_dim = 5
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0.01 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
+dropout_prob = 0.1 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
 
 varational = True
 
@@ -222,14 +224,18 @@ def normalize_observation(observation):
 
     return observation
 
-def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step):
+def write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, rp_mse_loss, s_mse_loss, kl_loss, test_loss, step):
     loss = loss.cpu().detach().numpy()
     rp_recon_loss = rp_recon_loss.cpu().detach().numpy()
     s_recon_loss = s_recon_loss.cpu().detach().numpy()
+    rp_mse_loss = rp_mse_loss.cpu().detach().numpy()
+    s_mse_loss = s_mse_loss.cpu().detach().numpy()
     kl_loss = kl_loss.cpu().detach().numpy()
     test_loss = test_loss.cpu().detach().numpy()
     writer.add_scalar("RP Reconstruction Loss", rp_recon_loss, step)
     writer.add_scalar("S Reconstruction Loss", s_recon_loss, step)
+    writer.add_scalar("RP MSE Loss", rp_mse_loss, step)
+    writer.add_scalar("S MSE Loss", s_mse_loss, step)
     writer.add_scalar("KL Loss", kl_loss, step)
     writer.add_scalar("Train Loss", loss, step)
     writer.add_scalar("Test Loss", test_loss, step)
@@ -387,8 +393,10 @@ def main():
                                                observations[::2])
         s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
                                               observations[1::2])
+        s_mse_loss = F.mse_loss(reconstructed_images[::2], observations[::2])
+        rp_mse_loss = F.mse_loss(reconstructed_images[1::2], observations[1::2])
 
-        loss = alpha * rp_recon_loss + (1. - alpha) * s_recon_loss
+        loss = alpha * ((1. - mse_loss_scalar) * rp_recon_loss + mse_loss_scalar * rp_mse_loss) + (1. - alpha) * ((1. - mse_loss_scalar) * s_recon_loss + mse_loss_scalar * s_mse_loss)
 
         kl_loss = 0.
         if varational:
@@ -442,7 +450,7 @@ def main():
             decoder.train()
 
         # Tensorboard
-        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, kl_loss, test_loss, step)
+        write_to_tensorboard(writer, loss, rp_recon_loss, s_recon_loss, rp_mse_loss, s_mse_loss, kl_loss, test_loss, step)
         # Save weights
         # TODO: Save when we care about this
 
