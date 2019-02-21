@@ -46,7 +46,8 @@ z_dim = 3
 curr_dim = None
 
 conv_repeat_num = 3
-dropout_prob = 0 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
+dropout_prob = 0 if "SGE_TASK_ID" not in os.environ else float(float(os.environ["SGE_TASK_ID"]) * 0.01)
+print("dropout_prob", dropout_prob)
 
 varational = True
 
