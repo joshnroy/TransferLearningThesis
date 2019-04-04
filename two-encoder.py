@@ -25,20 +25,21 @@ writer = SummaryWriter("runs/trial" + str(trial_num))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 img_size = (45, 80)
+img_channels = 1
 batch_size = 1
 mixed_batch_size = 200
 mixed_batch_size_per_gpu = int(mixed_batch_size / num_gpus)
-test_batch_size = 100
+test_batch_size = int(mixed_batch_size / 2)
 state_size = 4
-rp_size = 12
+rp_size = 100
 action_size = 1
 image_dimension = img_size[0] * img_size[1] * 3
 action_dimension = 2
 
 alpha = 0.5
-beta = 0.8
+beta = 0.5
 prediction_loss_term = 0.
-mse_loss_scalar = 0.5
+mse_loss_scalar = 0.
 
 print("trial_num", trial_num)
 
@@ -49,6 +50,7 @@ curr_dim = None
 
 conv_repeat_num = 3
 dropout_prob = 0.1 if "SGE_TASK_ID" not in os.environ else float(os.environ["SGE_TASK_ID"] * 0.01)
+linear_decoder_dropout_prob = 0.1
 
 varational = True
 
@@ -66,7 +68,7 @@ class rp_encoder(nn.Module):
 
         # Compute Encoder layers
         layers = []
-        layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
+        layers.append(nn.Conv2d(img_channels, conv_dim, kernel_size=3, padding=1))
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
 
@@ -75,7 +77,6 @@ class rp_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
         layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
@@ -121,7 +122,7 @@ class s_encoder(nn.Module):
 
         # Compute Encoder layers
         layers = []
-        layers.append(nn.Conv2d(3, conv_dim, kernel_size=3, padding=1))
+        layers.append(nn.Conv2d(img_channels, conv_dim, kernel_size=3, padding=1))
         layers.append(nn.BatchNorm2d(conv_dim))
         layers.append(nn.ReLU())
 
@@ -130,7 +131,6 @@ class s_encoder(nn.Module):
             layers.append(nn.Conv2d(curr_dim, conv_dim * (i+2), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+2)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+2)
 
         layers.append(nn.Conv2d(curr_dim, z_dim, kernel_size=1))
@@ -178,14 +178,6 @@ class Decoder(nn.Module):
         self.linear_decoder = nn.Sequential(
             nn.Linear(state_size + rp_size, int(z_dim * 10 * 5)),
             nn.ReLU(True),
-            # nn.Linear(int(z_dim * 10 * 5), int(z_dim * 10 * 5)),
-            # nn.ReLU(True),
-            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            # nn.ReLU(True),
-            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            # nn.ReLU(True),
-            # nn.Linear(int(z_dim * 10 * 5), z_dim * 10 * 5),
-            # nn.ReLU(True),
         )
 
         # Decoder (320 - 256 - 192 - 128 - 64)
@@ -198,10 +190,9 @@ class Decoder(nn.Module):
             layers.append(nn.ConvTranspose2d(curr_dim , conv_dim * (i+1), kernel_size=4, stride=2, padding=1))
             layers.append(nn.BatchNorm2d(conv_dim * (i+1)))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout2d(p=dropout_prob, inplace=True))
             curr_dim = conv_dim * (i+1)
 
-        layers.append(nn.ConvTranspose2d(curr_dim, 3, kernel_size=(3, 8), padding=1))
+        layers.append(nn.ConvTranspose2d(curr_dim, img_channels, kernel_size=(3, 8), padding=1))
         layers.append(nn.Sigmoid())
         self.decoder = nn.Sequential(*layers)
         # print(self.decoder)
@@ -211,12 +202,15 @@ class Decoder(nn.Module):
         # Decode
         recon = self.linear_decoder(x)
         recon = recon.reshape(mixed_batch_size_per_gpu, z_dim,  10, 5)
-        recon = self.decoder(recon)
+        recon = torch.clamp(self.decoder(recon), min=0., max=1.)
         return recon
 
 
 def normalize_observation(observation):
     observation = observation.reshape(mixed_batch_size, img_size[0], img_size[1], 3)
+    if img_channels == 1:
+        observation = np.dot(observation[..., :3], [0.299, 0.587, 0.114])
+        observation = np.expand_dims(observation, axis=3)
     observation = np.transpose(observation, (0, 3, 2, 1))
     observation = observation.copy()
     observation = observation / 255.
@@ -301,23 +295,21 @@ def main():
     # lr = 1e-2
     lr = 1e-4
     noise_scalar = 0.
-    weight_decay = 0.
+    weight_decay = 1e-3
+    using_ams = False
 
     # Set solver
-    rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay)
+    rp_solver = optim.Adam(rp_en.parameters(), lr=lr, weight_decay=weight_decay, amsgrad=using_ams)
 
-    s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=weight_decay)
+    s_solver = optim.Adam(s_en.parameters(), lr=lr, weight_decay=weight_decay, amsgrad=using_ams)
 
-    d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=weight_decay)
-
-    # print(np.sum(p.numel() for p in rp_en.parameters() if p.requires_grad), np.sum(p.numel() for p in s_en.parameters() if p.requires_grad), np.sum(p.numel() for p in decoder.parameters() if p.requires_grad))
-    # sys.exit()
+    d_solver = optim.Adam(decoder.parameters(), lr=lr, weight_decay=weight_decay, amsgrad=using_ams)
 
     # Main loop
     step = 0
     epoch = 0
     test_loss = 0.
-    for _ in range(50000):
+    for _ in range(20000):
         if step % 50 == 0:
             print(step)
 
@@ -351,7 +343,7 @@ def main():
         np.random.shuffle(shuffle_rp)
         shuffle_s = np.arange(int(mixed_batch_size / 2))
         np.random.shuffle(shuffle_s)
-        
+
         observations, actions = mixed_batch
 
         observations[::2] = observations[::2][shuffle_rp]
@@ -361,11 +353,11 @@ def main():
 
         observations = normalize_observation(observations).astype(np.float32)
         observations = torch.from_numpy(observations).to(device)
-        observations = torch.clamp(observations + torch.randn_like(observations) * noise_scalar, min=0., max=1.)
+        noisy_observations = torch.clamp(observations + torch.randn_like(observations) * noise_scalar, min=0., max=1.)
 
         # Forward pass of the network
-        render_params, rp_mu, rp_var = rp_en(observations)
-        state, s_mu, s_var = s_en(observations)
+        render_params, rp_mu, rp_var = rp_en(noisy_observations)
+        state, s_mu, s_var = s_en(noisy_observations)
         encoded = torch.cat((render_params, state), 1)
         reconstructed_images = decoder(encoded)
 
@@ -373,13 +365,13 @@ def main():
         assert (rp_var >= 0.).all()
         assert (s_var >= 0.).all()
 
-        if step % 100 == 0:
-            writer.add_image("rp_original", pytorch_to_cv(observations[0]), step)
+        if step % 1000 == 0:
+            writer.add_image("rp_original", pytorch_to_cv(noisy_observations[0]), step)
             writer.add_image("rp_reconstructed", pytorch_to_cv(reconstructed_images[0]), step)
-            writer.add_image("s_original", pytorch_to_cv(observations[1]), step)
+            writer.add_image("s_original", pytorch_to_cv(noisy_observations[1]), step)
             writer.add_image("s_reconstructed", pytorch_to_cv(reconstructed_images[1]), step)
 
-        if step % 100 == 0:
+        if step % 1000 == 0:
             for name, param in rp_en.named_parameters():
                 writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
             for name, param in s_en.named_parameters():
@@ -389,12 +381,12 @@ def main():
             writer.add_histogram("RP and S", encoded.clone().cpu().data.numpy(), step)
 
         # Compute Loss
-        rp_recon_loss = F.binary_cross_entropy(reconstructed_images[::2],
+        rp_recon_loss = F.mse_loss(reconstructed_images[::2],
                                                observations[::2])
-        s_recon_loss = F.binary_cross_entropy(reconstructed_images[1::2],
+        s_recon_loss = F.mse_loss(reconstructed_images[1::2],
                                               observations[1::2])
-        s_mse_loss = F.mse_loss(reconstructed_images[::2], observations[::2])
-        rp_mse_loss = F.mse_loss(reconstructed_images[1::2], observations[1::2])
+        s_mse_loss = F.mse_loss(state[2::2], state[:-2:2])
+        rp_mse_loss = F.mse_loss(render_params[3::2], render_params[1:-1:2])
 
         loss = alpha * ((1. - mse_loss_scalar) * rp_recon_loss + mse_loss_scalar * rp_mse_loss) + (1. - alpha) * ((1. - mse_loss_scalar) * s_recon_loss + mse_loss_scalar * s_mse_loss)
 
@@ -431,7 +423,7 @@ def main():
             # Compute Loss
             assert ((reconstructed_images >= 0.).all() and (reconstructed_images <= 1.).all())
 
-            test_loss = F.binary_cross_entropy(reconstructed_images, test_observations)
+            test_loss = F.mse_loss(reconstructed_images, test_observations)
 
             if step % 100 == 0:
                 writer.add_image("test_original", pytorch_to_cv(test_observations[randint(0,
