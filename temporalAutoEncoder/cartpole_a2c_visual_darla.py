@@ -24,10 +24,10 @@ display.start()
 
 WEIGHTS_FILE = "vae_cnn_cartpole.h5"
 
-EPISODES = 10000
+EPISODES = 60000
 RECORD_IMAGES = True
 
-HISTORY_LEN = 3
+HISTORY_LEN = 10
 
 
 # A2C(Advantage Actor-Critic) agent for the Cartpole
@@ -70,8 +70,8 @@ class A2CAgent:
         # Concatenate
         output = concatenate(encoded)
 
-        # output = Dense(512, activation='relu', kernel_initializer='he_uniform')(output)
-        # output = Dense(256, activation='relu', kernel_initializer='he_uniform')(output)
+        output = Dense(160, activation='relu', kernel_initializer='he_uniform')(output)
+        output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(48, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(self.action_size, activation='softmax', kernel_initializer='he_uniform')(output)
@@ -100,8 +100,8 @@ class A2CAgent:
         # Concatenate
         output = concatenate(encoded)
 
-        # output = Dense(512, activation='relu', kernel_initializer='he_uniform')(output)
-        # output = Dense(256, activation='relu', kernel_initializer='he_uniform')(output)
+        output = Dense(160, activation='relu', kernel_initializer='he_uniform')(output)
+        output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(48, activation='relu', kernel_initializer='he_uniform')(output)
         output = Dense(self.value_size, activation='softmax', kernel_initializer='he_uniform')(output)
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
     scores, episodes = [], []
 
-    with open('save_graph/visual_darla3.csv', 'w') as csvfile:
+    with open('save_graph/visual_darla4_history10.csv', 'w') as csvfile:
         writer = csv.writer(csvfile)
         for e in trange(EPISODES):
             states_history = []
