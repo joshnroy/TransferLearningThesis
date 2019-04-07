@@ -42,8 +42,8 @@ class A2CAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
-        self.actor_lr = 1. * 1e-5
-        self.critic_lr = 5. * 1e-5
+        self.actor_lr = 1. * 1e-3
+        self.critic_lr = 5. * 1e-3
 
         # create model for policy network
         self.actor = self.build_actor()
@@ -77,9 +77,9 @@ class A2CAgent:
         # output = Dense(160, activation='relu', kernel_initializer='he_uniform')(output)
         # output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         # output = Dense(48, activation='relu', kernel_initializer='he_uniform')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        output = Dense(48, activation='relu')(output)
+        output = Dense(48, activation='relu')(output)
+        output = Dense(48, activation='relu')(output)
         output = Dense(self.action_size, activation='softmax')(output)
         # output = Lambda(lambda x: x * 500)(output)
 
@@ -129,10 +129,10 @@ class A2CAgent:
         # output = Dense(160, activation='relu', kernel_initializer='he_uniform')(output)
         # output = Dense(96, activation='relu', kernel_initializer='he_uniform')(output)
         # output = Dense(48, activation='relu', kernel_initializer='he_uniform')(output)
-        # output = Dense(24, activation='relu', kernel_initializer='he_uniform')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        # output = Dense(48, activation='relu', kernel_initializer='he_uniform')(output)
+        output = Dense(48, activation='relu')(output)
+        output = Dense(48, activation='relu')(output)
+        output = Dense(48, activation='relu')(output)
         output = Dense(self.value_size, activation='linear')(output)
 
         # output = Lambda(lambda x: x * 300)(output)
@@ -199,6 +199,8 @@ class A2CAgent:
             advantages[0][action] = reward + self.discount_factor * (next_value) - value
             target[0][0] = reward + self.discount_factor * next_value
         softmax_advantages = advantages / np.sum(advantages)
+        print(advantages, reward, self.discount_factor * (next_value), value)
+        assert(np.sum(softmax_advantages) > 0.)
 
         assert(not np.isnan(states_history).any())
         # print(type(states_history), len(states_history), states_history[0].shape)
