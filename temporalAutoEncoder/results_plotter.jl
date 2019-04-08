@@ -23,8 +23,8 @@ for i in 2:length(actor_reward)
     smoothed_actor_reward[i] = alpha * actor_reward[i] + (1. - alpha) * smoothed_actor_reward[i-1]
     smoothed_critic_reward[i] = alpha * critic_reward[i] + (1. - alpha) * smoothed_critic_reward[i-1]
 end
-clamp!(smoothed_actor_reward, 0, 500)
-clamp!(smoothed_critic_reward, 0, 500)
+clamp!(smoothed_actor_reward, -100, 500)
+clamp!(smoothed_critic_reward, -100, 500)
 #= multiple = [y smoothed] =#
 #= rewards = [actor_reward smoothed_actor_reward critic_reward smoothed_critic_reward] =#
 rewards = [smoothed_actor_reward * 10 smoothed_critic_reward]
