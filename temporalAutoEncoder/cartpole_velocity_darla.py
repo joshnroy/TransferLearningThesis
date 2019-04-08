@@ -17,8 +17,12 @@ from copy import deepcopy
 
 from pyvirtualdisplay import Display
 
+from variational_autoencoder_deconv import vae
+
 display = Display(visible=0, size=(100, 100))
 display.start()
+
+WEIGHTS_FILE = "vae_cnn_cartpole.h5"
 
 EPISODES = 100000
 RECORD_IMAGES = True
@@ -31,7 +35,7 @@ NUM_CONV_LAYERS = 3
 
 # A2C(Advantage Actor-Critic) agent for the Cartpole
 class A2CAgent:
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, vae):
         # if you want to see Cartpole learning, then change to True
         self.render = False
         self.load_model = False
@@ -44,6 +48,7 @@ class A2CAgent:
         self.discount_factor = 0.99
         self.actor_lr = 1. * 1e-5
         self.critic_lr = 5. * 1e-5
+        self.vae = vae
 
         # create model for policy network
         self.actor = self.build_actor()
@@ -156,6 +161,11 @@ class A2CAgent:
 
 
 if __name__ == "__main__":
+    vae.load_weights(WEIGHTS_FILE)
+
+    model = Model(vae.inputs, [vae.layers[-2].outputs[2]])
+    for layer in model.layers:
+        layer.trainable = False
 
     # In case of CartPole-v1, maximum length of episode is 500
     env = gym.make('cartpole-visual-v1')
@@ -164,7 +174,7 @@ if __name__ == "__main__":
     action_size = env.action_space.n
 
     # make A2C agent
-    agent = A2CAgent(state_size, action_size)
+    agent = A2CAgent(state_size, action_size, model)
 
     scores, episodes = [], []
 

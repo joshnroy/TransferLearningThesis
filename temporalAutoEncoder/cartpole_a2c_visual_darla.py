@@ -15,7 +15,7 @@ import scipy
 
 from pyvirtualdisplay import Display
 
-from variational_autoencoder_deconv import vae, sampling
+from variational_autoencoder_deconv import vae
 
 from copy import deepcopy
 
@@ -157,6 +157,7 @@ if __name__ == "__main__":
     model = Model(vae.inputs, [vae.layers[-2].outputs[2]])
     for layer in model.layers:
         layer.trainable = False
+
     # In case of CartPole-v1, maximum length of episode is 500
     env = gym.make('cartpole-visual-v1')
     # get size of state and action from environment
