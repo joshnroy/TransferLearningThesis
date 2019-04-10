@@ -3,10 +3,8 @@ import gym
 import gym_cartpole_visual
 
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Flatten, Input, Conv2D, BatchNormalization, MaxPool2D, Reshape
+from keras.layers import Dense, Activation, Flatten, Input, Conv2D, BatchNormalization, MaxPool2D, Reshape, Lambda, concatenate
 from keras.optimizers import Adam
-
-from variational_autoencoder_deconv import vae
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
@@ -15,17 +13,17 @@ from rl.memory import SequentialMemory
 import sys
 from pyvirtualdisplay import Display
 
+from variational_autoencoder_deconv import vae
+
 display = Display(visible=0, size=(100, 100))
 display.start()
 
 
 ENV_NAME = 'cartpole-visual-v1'
-NUM_FILTERS = 3
+NUM_FILTERS = 6
 NUM_CONV_LAYERS = 3
 NUM_HIDDEN_LAYERS = 3
 HIDDEN_LAYER_SIZE = 48
-
-WEIGHTS_FILE = "../temporalAutoEncoder/vae_cnn_cartpole.h5"
 
 
 # Get the environment and extract the number of actions.
@@ -34,21 +32,29 @@ np.random.seed(123)
 env.seed(123)
 nb_actions = env.action_space.n
 
+vae.load_weights(WEIGHTS_FILE)
+
+vae = Model(vae.inputs, [vae.layers[-2].outputs[2]])
+for layer in vae.layers:
+    layer.trainable = False
+
 # Next, we build a very simple model regardless of the dueling architecture
 # if you enable dueling network in DQN , DQN will build a dueling network base on your model automatically
 # Also, you can build a dueling network by yourself and turn off the dueling network in DQN.
-vae.load_weights(WEIGHTS_FILE)
-vae_model = Model(vae.inputs, [vae.layers[-2].outputs[2]])
-for layer in vae_model.layers:
-    layer.trainable = False
 # print(env.observation_space.shape)
 # sys.exit()
-inputs = Input(shape=(1,) + env.observation_space.shape, name="meme_input")
+inputs = Input(shape=(1,) + (64 * 64 * 3 + 2,), name="meme_input")
+flat_img_input = Lambda(lambda x: x[:, :, :-2])(inputs)
+vel_input = Lambda(lambda x: x[:, :, -2:])(inputs)
+conv = Reshape(target_shape=(64, 64, 3))(flat_img_input)
+vel_input = Reshape(target_shape=(2,))(vel_input)
+
 # Convolutional Layers
-conv = Reshape(target_shape=(64, 64, 3))(inputs)
-outputs = vae_model(conv)
-for _ in range(NUM_HIDDEN_LAYERS):
+outputs = vae(conv)
+for _ in range(NUM_HIDDEN_LAYERS-1):
     outputs = Dense(HIDDEN_LAYER_SIZE, activation='relu')(outputs)
+outputs = concatenate([outputs, vel_input])
+outputs = Dense(HIDDEN_LAYER_SIZE, activation='relu')(outputs)
 outputs = Dense(nb_actions, activation='linear')(outputs)
 model = Model(inputs, outputs)
 print(model.summary())
@@ -59,14 +65,14 @@ memory = SequentialMemory(limit=50000, window_length=1)
 policy = BoltzmannQPolicy()
 # enable the dueling network
 # you can specify the dueling_type to one of {'avg','max','naive'}
-dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=10,
+dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=100,
                enable_dueling_network=True, dueling_type='avg', target_model_update=1e-2, policy=policy)
-dqn.compile(Adam(lr=1e-1), metrics=['mae'])
+dqn.compile(Adam(lr=1e-5), metrics=['mae'])
 
 # Okay, now it's time to learn something! We visualize the training here for show, but this
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
-dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
 
 # After training is done, we save the final weights.
 dqn.save_weights('duel_dqn_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
