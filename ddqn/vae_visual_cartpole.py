@@ -18,6 +18,7 @@ from variational_autoencoder_deconv import vae
 display = Display(visible=0, size=(100, 100))
 display.start()
 
+WEIGHTS_FILE = "vae_cnn_cartpole.h5"
 
 ENV_NAME = 'cartpole-visual-v1'
 NUM_FILTERS = 6
