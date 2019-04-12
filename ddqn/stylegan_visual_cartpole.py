@@ -2,9 +2,10 @@ import numpy as np
 import gym
 import gym_cartpole_visual
 
-from keras.models import Sequential, Model
+from keras.models import Sequential, Model, load_model
 from keras.layers import Dense, Activation, Flatten, Input, Conv2D, BatchNormalization, MaxPool2D, Reshape, Lambda, concatenate
 from keras.optimizers import Adam
+import keras
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
@@ -22,7 +23,7 @@ MODEL_NAME = "../../stylegan/encoder_results/baseline_encoder"
 ENV_NAME = 'cartpole-visual-v1'
 NUM_FILTERS = 6
 NUM_CONV_LAYERS = 3
-NUM_HIDDEN_LAYERS = 3
+NUM_HIDDEN_LAYERS = 5
 HIDDEN_LAYER_SIZE = 48
 
 
@@ -34,7 +35,6 @@ nb_actions = env.action_space.n
 
 encoder = load_model(MODEL_NAME)
 
-encoder = Model(encoder.inputs, [encoder.layers[-2].outputs[2]])
 for layer in encoder.layers:
     layer.trainable = False
 
@@ -67,15 +67,21 @@ policy = BoltzmannQPolicy()
 # you can specify the dueling_type to one of {'avg','max','naive'}
 dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=100,
                enable_dueling_network=True, dueling_type='avg', target_model_update=1e-2, policy=policy)
-dqn.compile(Adam(lr=1e-5), metrics=['mae'])
+dqn.compile(Adam(lr=1e-4), metrics=['mae'])
 
 # Okay, now it's time to learn something! We visualize the training here for show, but this
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
-dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
+history = dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+np.savez_compressed("stylegan_dqn_training_history_500k", episode_reward=np.asarray(history.history['episode_reward']))
 
 # After training is done, we save the final weights.
 dqn.save_weights('duel_dqn_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
 
 # Finally, evaluate our algorithm for 5 episodes.
-dqn.test(env, nb_episodes=5, visualize=False)
+print("Test on original colors")
+dqn.test(env, nb_episodes=10, visualize=False)
+
+print("Test on changed colors")
+env.change_color()
+dqn.test(env, nb_episodes=10, visualize=False)
