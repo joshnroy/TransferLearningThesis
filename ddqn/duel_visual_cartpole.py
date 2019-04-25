@@ -71,10 +71,11 @@ dqn.compile(Adam(lr=1e-4), metrics=['mae'])
 # Okay, now it's time to learn something! We visualize the training here for show, but this
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
-dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+history = dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+np.savez_compressed("dqn_visual_history", episode_reward=np.asarray(history.history['episode_reward']))
 
 # After training is done, we save the final weights.
-dqn.save_weights('duel_dqn_{}_weights_100k.h5f'.format(ENV_NAME), overwrite=True)
+dqn.save_weights('duel_dqn_{}_weights_500k.h5f'.format(ENV_NAME), overwrite=True)
 
 # Finally, evaluate our algorithm for 5 episodes.
 print("Test on original colors")

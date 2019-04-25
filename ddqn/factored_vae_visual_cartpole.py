@@ -78,11 +78,11 @@ dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 # Okay, now it's time to learn something! We visualize the training here for show, but this
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
-history = dqn.fit(env, nb_steps=100000, visualize=False, verbose=1)
-np.savez_compressed("vae_dqn_training_history_100k_modified", episode_reward=np.asarray(history.history['episode_reward']))
+history = dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+np.savez_compressed("vae_dqn_training_history_500k_modified", episode_reward=np.asarray(history.history['episode_reward']))
 
 # After training is done, we save the final weights.
-dqn.save_weights('factored_vae_dqn100k_modified_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
+dqn.save_weights('factored_vae_dqn500k_modified_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
 
 # Finally, evaluate our algorithm for 5 episodes.
 print("Test on original colors")

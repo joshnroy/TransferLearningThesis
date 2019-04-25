@@ -73,7 +73,7 @@ dqn.compile(Adam(lr=1e-4), metrics=['mae'])
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
 history = dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
-np.savez_compressed("stylegan_dqn_training_history_500k", episode_reward=np.asarray(history.history['episode_reward']))
+np.savez_compressed("stylegan_dqn_training_history_500k_again", episode_reward=np.asarray(history.history['episode_reward']))
 
 # After training is done, we save the final weights.
 dqn.save_weights('duel_dqn_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
