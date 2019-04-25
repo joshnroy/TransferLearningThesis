@@ -40,8 +40,7 @@ import sys
 # instead of sampling from Q(z|X), sample eps = N(0,I)
 # then z = z_mean + sqrt(var)*eps
 def sampling(args):
-    """Reparameterization trick by sampling fr an isotropic unit Gaussian.
-
+    """Reparameterization trick by sampling fr an isotropic unit Gaussian.  
     # Arguments
         args (tensor): mean and log of variance of Q(z|X)
 
@@ -147,8 +146,8 @@ else:
 batch_size = 128
 kernel_size = 3
 filters = 16
-latent_dim = 16
-epochs = 1000
+latent_dim = 48
+epochs = 100000
 
 # VAE model = encoder + decoder
 # build encoder model

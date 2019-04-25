@@ -31,6 +31,8 @@ HISTORY_LEN = 5
 
 NUM_FILTERS = 3
 NUM_CONV_LAYERS = 3
+NUM_HIDDEN_LAYERS = 3
+NUM_HIDDEN_NEURONS = 48
 
 
 # A2C(Advantage Actor-Critic) agent for the Cartpole
@@ -46,8 +48,8 @@ class A2CAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
-        self.actor_lr = 1. * 1e-5
-        self.critic_lr = 5. * 1e-5
+        self.actor_lr = 1. * 1e-3
+        self.critic_lr = 5. * 1e-3
         self.vae = vae
 
         # create model for policy network
@@ -72,9 +74,8 @@ class A2CAgent:
         # Concatenate
         output = concatenate([encoded, vel_input])
 
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        for _ in range(NUM_HIDDEN_LAYERS):
+            output = Dense(NUM_HIDDEN_NEURONS, activation='relu')(output)
         output = Dense(self.action_size, activation='softmax')(output)
 
         actor = Model(inputs = inputs, outputs=[output])
@@ -100,9 +101,8 @@ class A2CAgent:
         # Concatenate
         output = concatenate([encoded, vel_input])
 
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        for _ in range(NUM_HIDDEN_LAYERS):
+            output = Dense(NUM_HIDDEN_NEURONS, activation='relu')(output)
         output = Dense(self.value_size, activation='linear')(output)
 
         critic = Model(inputs = inputs, outputs=[output])
@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
     scores, episodes = [], []
 
-    with open('save_graph/velocity_darla1.csv', 'w') as csvfile:
+    with open('save_graph/velocity_darla2.csv', 'w') as csvfile:
         writer = csv.writer(csvfile)
         for e in trange(EPISODES):
             states_history = []
