@@ -145,9 +145,15 @@ else:
 # network parameters
 batch_size = 128
 kernel_size = 3
+<<<<<<< HEAD
 filters = 16
 latent_dim = 48
 epochs = 100000
+=======
+filters = 32
+latent_dim = 48
+epochs = 2000
+>>>>>>> 2560b68e8601966fe4741f1caa9be3dcd8d76611
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -232,7 +238,7 @@ if __name__ == '__main__':
     vae.add_loss(vae_loss)
     learning_rate = 1e-3
     decay = learning_rate / epochs
-    adam = Adam(lr=learning_rate)
+    adam = Adam(lr=learning_rate, decay=decay)
     vae.compile(optimizer=adam)
     vae.summary()
     plot_model(vae, to_file='vae_cnn.png', show_shapes=True)

@@ -7,3 +7,5 @@ src/*
 rp_training_data/*
 state_training_data/*
 *.npy
+*.pyc
+*.png

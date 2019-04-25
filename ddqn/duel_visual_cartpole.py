@@ -66,15 +66,21 @@ policy = BoltzmannQPolicy()
 # you can specify the dueling_type to one of {'avg','max','naive'}
 dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=100,
                enable_dueling_network=True, dueling_type='avg', target_model_update=1e-2, policy=policy)
-dqn.compile(Adam(lr=1e-5), metrics=['mae'])
+dqn.compile(Adam(lr=1e-4), metrics=['mae'])
 
 # Okay, now it's time to learn something! We visualize the training here for show, but this
 # slows down training quite a lot. You can always safely abort the training prematurely using
 # Ctrl + C.
-dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
+history = dqn.fit(env, nb_steps=500000, visualize=False, verbose=1)
+np.savez_compressed("dqn_visual_history", episode_reward=np.asarray(history.history['episode_reward']))
 
 # After training is done, we save the final weights.
-dqn.save_weights('duel_dqn_{}_weights.h5f'.format(ENV_NAME), overwrite=True)
+dqn.save_weights('duel_dqn_{}_weights_500k.h5f'.format(ENV_NAME), overwrite=True)
 
 # Finally, evaluate our algorithm for 5 episodes.
-dqn.test(env, nb_episodes=5, visualize=False)
+print("Test on original colors")
+dqn.test(env, nb_episodes=10, visualize=False)
+
+print("Test on changed colors")
+env.change_color()
+dqn.test(env, nb_episodes=10, visualize=False)

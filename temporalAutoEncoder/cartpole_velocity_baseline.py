@@ -23,10 +23,10 @@ display.start()
 EPISODES = 100000
 RECORD_IMAGES = True
 
-HISTORY_LEN = 5
-
 NUM_FILTERS = 3
 NUM_CONV_LAYERS = 3
+NUM_HIDDEN_LAYERS = 3
+HIDDEN_LAYER_SIZE = 24
 
 
 # A2C(Advantage Actor-Critic) agent for the Cartpole
@@ -42,8 +42,10 @@ class A2CAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
-        self.actor_lr = 1. * 1e-5
-        self.critic_lr = 5. * 1e-5
+        self.actor_lr = 1. * 1e-4
+        self.critic_lr = 5. * 1e-4
+        self.actor_decay = 0.
+        self.critic_decay = 0.
 
         # create model for policy network
         self.actor = self.build_actor()
@@ -71,14 +73,12 @@ class A2CAgent:
             numFilters *= 2
 
         # Flatten
-        flattened = [Flatten()(conv), vel_input]
+        flattened = Flatten()(conv)
 
-        # Concatenate
-        output = concatenate(flattened)
-
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        for _ in range(NUM_HIDDEN_LAYERS-1):
+            flattened = Dense(HIDDEN_LAYER_SIZE, activation='relu')(flattened)
+        output = concatenate([flattened, vel_input])
+        output = Dense(HIDDEN_LAYER_SIZE, activation='relu')(output)
         output = Dense(self.action_size, activation='softmax')(output)
 
         actor = Model(inputs = inputs, outputs=[output])
@@ -87,7 +87,7 @@ class A2CAgent:
 
         # See note regarding crossentropy in cartpole_reinforce.py
         actor.compile(loss='categorical_crossentropy',
-                      optimizer=Adam(lr=self.actor_lr))
+                      optimizer=Adam(lr=self.actor_lr, decay=self.actor_decay))
         return actor
 
     # critic: state is input and value of state is output of model
@@ -108,21 +108,19 @@ class A2CAgent:
             numFilters *= 2
 
         # Flatten
-        flattened = [Flatten()(conv), vel_input]
+        flattened = Flatten()(conv)
 
-        # Concatenate
-        output = concatenate(flattened)
-
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
-        output = Dense(24, activation='relu')(output)
+        for _ in range(NUM_HIDDEN_LAYERS-1):
+            flattened = Dense(HIDDEN_LAYER_SIZE, activation='relu')(flattened)
+        output = concatenate([flattened, vel_input])
+        output = Dense(HIDDEN_LAYER_SIZE, activation='relu')(output)
         output = Dense(self.value_size, activation='linear')(output)
 
         critic = Model(inputs = inputs, outputs=[output])
 
         critic.summary()
 
-        critic.compile(loss="mse", optimizer=Adam(lr=self.critic_lr))
+        critic.compile(loss="mse", optimizer=Adam(lr=self.critic_lr, decay=self.critic_decay))
         return critic
 
     # using the output of policy network, pick action stochastically
