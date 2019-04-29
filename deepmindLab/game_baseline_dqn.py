@@ -37,18 +37,18 @@ from rl.policy import BoltzmannQPolicy
 from rl.memory import SequentialMemory
 
 
-def run(num_episodes):
+def run():
     """Construct and start the environment."""
 
     env = SeekAvoidEnv()
-    nb_actions = 75497472 # All possible actions multiplied together
+    nb_actions = 2222111 # All possible action, where each eaction is a unit in this vector
 
     model = Sequential()
     model.add(Flatten(input_shape=(1,) + env.observation_space.shape))
     model.add(Dense(16, activation='relu'))
     model.add(Dense(16, activation='relu'))
     model.add(Dense(16, activation='relu'))
-    model.add(Dense(nb_actions, activation='linear'))
+    model.add(Dense(nb_actions, activation='sigmoid'))
     print(model.summary())
 
     memory = SequentialMemory(limit=50000, window_length=1)
@@ -57,7 +57,7 @@ def run(num_episodes):
     dqn = DQNAgent(model=model, nb_actions=nb_actions, memory=memory, nb_steps_warmup=100, enable_dueling_network=True, dueling_type='avg', target_model_update=1e-2, policy=policy)
     dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 
-    dqn.fit(env, nb_steps=50000, visualize=False, verbose=2)
+    dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
 
     dqn.test(env, nb_episodes=5, visualize=False)
 
@@ -82,6 +82,4 @@ def run(num_episodes):
 
 
 if __name__ == '__main__':
-    num_episodes = 10
-
-    run(num_episodes)
+    run()
