@@ -29,12 +29,17 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 import deepmind_lab
 
 from keras.models import Sequential
-from keras.layers import Dense, Flatten
+from keras.layers import Dense, Flatten, Conv2D, BatchNormalization, MaxPooling2D, Reshape
 from keras.optimizers import Adam
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy
 from rl.memory import SequentialMemory
+
+NUM_CONV_LAYERS = 3
+NUM_FILTERS = 6
+HIDDEN_SIZE = 24
+NUM_HIDDEN_LAYERS = 3
 
 
 def run():
@@ -44,10 +49,20 @@ def run():
     nb_actions = env.action_space.size # All possible action, where each action is a unit in this vector
 
     model = Sequential()
-    model.add(Flatten(input_shape=(1,) + env.observation_space.shape))
-    model.add(Dense(16, activation='relu'))
-    model.add(Dense(16, activation='relu'))
-    model.add(Dense(16, activation='relu'))
+    num_filters = NUM_FILTERS
+    model.add(Reshape(target_shape = env.observation_space.shape, input_shape=(1,) + env.observation_space.shape))
+    model.add(Conv2D(num_filters, 3))
+    model.add(MaxPooling2D())
+    model.add(BatchNormalization())
+    num_filters *= 2
+    for _ in range(NUM_CONV_LAYERS - 1):
+        model.add(Conv2D(num_filters, 3))
+        model.add(MaxPooling2D())
+        model.add(BatchNormalization())
+        num_filters *= 2
+    model.add(Flatten())
+    for _ in range(NUM_HIDDEN_LAYERS):
+        model.add(Dense(HIDDEN_SIZE, activation='relu'))
     model.add(Dense(nb_actions, activation='linear'))
     print(model.summary())
 
@@ -60,26 +75,6 @@ def run():
     dqn.fit(env, nb_steps=50000, visualize=False, verbose=1)
 
     dqn.test(env, nb_episodes=5, visualize=False)
-
-    # for i in six.moves.range(num_episodes):
-    #     observation = env.reset()
-    #     score = 0
-    #     j = 0
-    #     while True:
-    #         observation, reward, done, _ = env.step(action)
-
-    #         j += 1
-
-    #         if reward != 0:
-    #             score += reward
-    #             print('Score =', score)
-    #             sys.stdout.flush()
-
-    #         if done:
-    #             print("Episode " + str(i) + " done. Score: " + str(score))
-    #             break
-
-
 
 if __name__ == '__main__':
     run()
