@@ -71,7 +71,7 @@ class SeekAvoidEnv():
     def step(self, action):
         action = action.astype(np.intc)
         action = self.convert_action(action)
-        reward = self.env.step(action, num_steps=1)
+        reward = self.env.step(action, num_steps=4)
         done = not self.env.is_running()
         if not done:
             observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
