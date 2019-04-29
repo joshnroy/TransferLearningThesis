@@ -56,11 +56,14 @@ class SeekAvoidEnv():
             possible_actions_tuples.append(tuple(x))
 
 
-        self.codebook = huffman.codebook((x, 1) for x in possible_actions_tuples)
-        ints = [int(x, 2) for x in self.codebook.values()]
-        self.action_space = np.zeros(max(ints), dtype=np.intc)
+        # self.codebook = huffman.codebook((x, 1) for x in possible_actions_tuples)
+        # ints = [int(x, 2) for x in self.codebook.values()]
+        # self.action_space = np.zeros(max(ints), dtype=np.intc)
+        # self.int_codebook = {int(self.codebook[x], 2): x for x in self.codebook}
+        self.codebook = {i: x for i, x, in enumerate(possible_actions_tuples)}
+        self.action_space = np.zeros(len(possible_actions_tuples), dtype=np.intc)
+        self.int_codebook = self.codebook
 
-        self.int_codebook = {int(self.codebook[x], 2): x for x in self.codebook}
 
     def seed(self, seed=None):
         return [seed]
