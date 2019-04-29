@@ -7,26 +7,68 @@ import sys
 import numpy as np
 import six
 import cv2
+import huffman
+from copy import deepcopy
+from tqdm import trange, tqdm
 
 import deepmind_lab
 
 class SeekAvoidEnv():
     def __init__(self):
         config = {"width": "100", "height": "100"}
+        self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
+
 
         level_script = "seekavoid_arena_01"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
+
+# Create huffman encoding of actions
+        possible_actions = []
+        print("Adding ", self.env.action_spec()[0]['name'])
+
+        for i in range(self.env.action_spec()[0]['min'], self.env.action_spec()[0]['max'], self.look_degree_step):
+            possible_actions.append([i])
+        print(len(possible_actions))
+
+        x = self.env.action_spec()[1]
+        print("Adding ", x['name'], len(possible_actions))
+        possible_actions_copy = possible_actions
+        possible_actions = []
+        for short_action in possible_actions_copy:
+            for i in range(x['min'], x['max'], self.look_degree_step):
+                to_add = deepcopy(short_action)
+                to_add.append(i)
+                possible_actions.append(to_add)
+
+        for x in self.env.action_spec()[2:]:
+            print(x['name'], len(possible_actions), x['min'], x['max'], range(x['min'], x['max']+1))
+            possible_actions_copy = possible_actions
+            possible_actions = []
+            for short_action in possible_actions_copy:
+                for i in range(x['min'], x['max'] + 1):
+                    to_add = deepcopy(short_action)
+                    to_add.append(i)
+                    possible_actions.append(to_add)
+        possible_actions_tuples = []
+        for x in possible_actions:
+            assert(len(x) == 7)
+            possible_actions_tuples.append(tuple(x))
+
+
+        self.codebook = huffman.codebook((x, 1) for x in possible_actions_tuples)
+        ints = [int(x, 2) for x in self.codebook.values()]
+        self.action_space = np.zeros(max(ints), dtype=np.intc)
+
+        self.int_codebook = {int(self.codebook[x], 2): x for x in self.codebook}
 
     def seed(self, seed=None):
         return [seed]
 
     def step(self, action):
         action = action.astype(np.intc)
-        print(action)
         action = self.convert_action(action)
         reward = self.env.step(action, num_steps=1)
-        print(action)
         done = not self.env.is_running()
         if not done:
             observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
@@ -47,50 +89,13 @@ class SeekAvoidEnv():
         self.env.close()
 
     def convert_action(self, action_int):
-        action_list = np.zeros(len(self.env.action_spec()), dtype=np.intc)
-        if action_int / 1000000 == 2:
-            action_list[0] = 10
-        elif action_int / 1000000 == 1:
-            action_list[0] = -10
-
-        action_int %= 1000000
-
-        if action_int / 100000 == 2:
-            action_list[1] = 10
-        elif action_int / 100000 == 1:
-            action_list[1] = -10
-
-        action_int %= 100000
-
-        if action_int / 10000 == 2:
-            action_list[2] = 1
-        elif action_int / 10000 == 1:
-            action_list[2] = -1
-
-        action_int %= 10000
-
-        if action_int / 1000 == 2:
-            action_list[3] == 1
-        elif action_int / 1000 == 1:
-            action_list[3] = -1
-
-        action_int %= 1000
-
-        if action_int / 100 == 1:
-            action_list[4] = 1
-
-        action_int %= 100
-
-        if action_int / 10 == 1:
-            action_list[5] = 1
-
-        if action_int == 1:
-            action_list[6] = 1
+        if action_int in self.int_codebook:
+            action_list = np.asarray(self.int_codebook[action_int], dtype=np.intc)
+        else:
+            action_list = np.zeros(7, np.intc)
 
         return action_list
 
 if __name__ == '__main__':
     print("testing convert action function")
     env = SeekAvoidEnv()
-    for i in range(2222111):
-        print(i, env.convert_action(i))

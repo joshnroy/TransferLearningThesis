@@ -41,14 +41,14 @@ def run():
     """Construct and start the environment."""
 
     env = SeekAvoidEnv()
-    nb_actions = 2222111 # All possible action, where each eaction is a unit in this vector
+    nb_actions = env.action_space.size # All possible action, where each action is a unit in this vector
 
     model = Sequential()
     model.add(Flatten(input_shape=(1,) + env.observation_space.shape))
     model.add(Dense(16, activation='relu'))
     model.add(Dense(16, activation='relu'))
     model.add(Dense(16, activation='relu'))
-    model.add(Dense(nb_actions, activation='sigmoid'))
+    model.add(Dense(nb_actions, activation='linear'))
     print(model.summary())
 
     memory = SequentialMemory(limit=50000, window_length=1)
