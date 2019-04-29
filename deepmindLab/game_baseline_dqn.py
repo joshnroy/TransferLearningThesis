@@ -77,4 +77,7 @@ def run():
     dqn.test(env, nb_episodes=5, visualize=False)
 
 if __name__ == '__main__':
+    # from tensorflow.python.client import device_lib
+    # print("\n\n\n\n", device_lib.list_local_devices())
+    # sys.exit()
     run()
