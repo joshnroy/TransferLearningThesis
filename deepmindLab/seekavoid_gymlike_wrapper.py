@@ -19,6 +19,8 @@ class SeekAvoidEnv():
         self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
+        self.i = 0
+
 
         level_script = "seekavoid_arena_01"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
@@ -27,7 +29,8 @@ class SeekAvoidEnv():
         possible_actions = []
         print("Adding ", self.env.action_spec()[0]['name'])
 
-        for i in range(self.env.action_spec()[0]['min'], self.env.action_spec()[0]['max'], self.look_degree_step):
+        # for i in range(self.env.action_spec()[0]['min'], self.env.action_spec()[0]['max'], self.look_degree_step):
+        for i in range(-200, 200, self.look_degree_step):
             possible_actions.append([i])
         print(len(possible_actions))
 
@@ -36,7 +39,7 @@ class SeekAvoidEnv():
         possible_actions_copy = possible_actions
         possible_actions = []
         for short_action in possible_actions_copy:
-            for i in range(x['min'], x['max'], self.look_degree_step):
+            for i in range(-200, 200, self.look_degree_step):
                 to_add = deepcopy(short_action)
                 to_add.append(i)
                 possible_actions.append(to_add)
@@ -71,10 +74,11 @@ class SeekAvoidEnv():
     def step(self, action):
         action = action.astype(np.intc)
         action = self.convert_action(action)
-        reward = self.env.step(action, num_steps=4)
+        reward = self.env.step(action, num_steps=1)
         done = not self.env.is_running()
         if not done:
             observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
+            self.i += 1
         else:
             observations = self.observation_space
         return observations, reward, done, {}
