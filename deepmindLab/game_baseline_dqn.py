@@ -49,8 +49,9 @@ def run():
     env = SeekAvoidEnv()
     nb_actions = env.action_space.size # All possible action, where each action is a unit in this vector
 
-    input_shape = (WINDOW_LENGTH,) + env.observation_space.shape
+    input_shape = env.observation_space.shape
     model = Sequential()
+    model.add(Reshape(target_shape=input_shape, input_shape = (1,) + input_shape))
     # if K.image_dim_ordering() == 'tf':
     #     # (width, height, channels)
     #     model.add(Permute((2, 3, 1), input_shape=input_shape))
@@ -59,14 +60,14 @@ def run():
     #     model.add(Permute((1, 2, 3), input_shape=input_shape))
     # else:
     #     raise RuntimeError('Unknown image_dim_ordering.')
-    model.add(Conv3D(32, (1, 8, 8), strides=(1, 4, 4), input_shape=input_shape))
+    model.add(Conv2D(8, (3, 3), strides=(2, 2), input_shape=input_shape))
     model.add(Activation('relu'))
-    model.add(Conv3D(64, (1, 4, 4), strides=(1, 2, 2)))
+    model.add(Conv2D(16, (3, 3), strides=(2, 2)))
     model.add(Activation('relu'))
-    model.add(Conv3D(64, (1, 3, 3), strides=(1, 1, 1)))
-    model.add(Activation('relu'))
+    # model.add(Conv2D(64, (3, 3), strides=(1, 1)))
+    # model.add(Activation('relu'))
     model.add(Flatten())
-    model.add(Dense(512))
+    model.add(Dense(128))
     model.add(Activation('relu'))
     model.add(Dense(nb_actions))
     model.add(Activation('linear'))
@@ -93,7 +94,7 @@ def run():
     # model.add(Dense(nb_actions, activation='sigmoid'))
     # print(model.summary())
 
-    memory = SequentialMemory(limit=400000, window_length=WINDOW_LENGTH)
+    memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
     policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05, nb_steps=1000000)
 
     dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory, nb_steps_warmup=50000, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
