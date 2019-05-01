@@ -43,7 +43,7 @@ NUM_CONV_LAYERS = 3
 NUM_FILTERS = 6
 HIDDEN_SIZE = 48
 NUM_HIDDEN_LAYERS = 5
-WINDOW_LENGTH = 1
+WINDOW_LENGTH = 4
 
 MULTI_GPU = False
 
@@ -53,9 +53,9 @@ def run():
     env = SeekAvoidEnv()
     nb_actions = env.action_space.size # All possible action, where each action is a unit in this vector
 
-    input_shape = env.observation_space.shape
+    input_shape = (WINDOW_LENGTH,) + env.observation_space.shape
     model = Sequential()
-    model.add(Reshape(target_shape=input_shape, input_shape = (1,) + input_shape))
+    # model.add(Reshape(target_shape=input_shape, input_shape = (WINDOW_LENGTH,) + input_shape))
     # if K.image_dim_ordering() == 'tf':
     #     # (width, height, channels)
     #     model.add(Permute((2, 3, 1), input_shape=input_shape))
@@ -64,9 +64,9 @@ def run():
     #     model.add(Permute((1, 2, 3), input_shape=input_shape))
     # else:
     #     raise RuntimeError('Unknown image_dim_ordering.')
-    model.add(Conv2D(8, (3, 3), strides=(2, 2), input_shape=input_shape))
+    model.add(Conv3D(8, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first', input_shape=input_shape))
     model.add(Activation('relu'))
-    model.add(Conv2D(16, (3, 3), strides=(2, 2)))
+    model.add(Conv3D(16, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first'))
     model.add(Activation('relu'))
     # model.add(Conv2D(64, (3, 3), strides=(1, 1)))
     # model.add(Activation('relu'))
