@@ -24,6 +24,7 @@ class SeekAvoidEnv():
 
         level_script = "seekavoid_arena_01"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
+        # self.window = cv2.namedWindow("Game Window", cv2.WINDOW_NORMAL)
 
 # Create huffman encoding of actions
         # possible_actions = []
@@ -73,10 +74,9 @@ class SeekAvoidEnv():
         action = self.convert_action(action)
         reward = self.env.step(action, num_steps=1)
         done = not self.env.is_running()
+        self.i += 1
         if not done:
             observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
-            # cv2.imwrite("original_observations/img" + str(self.i) + ".png", observations)
-            self.i += 1
         else:
             observations = self.observation_space
         return observations, reward, done, {}
@@ -86,8 +86,15 @@ class SeekAvoidEnv():
         observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
         return observations
 
-    def render(self):
-        image = self.env.observations()['RGB_INTERLEAVED']
+    def render(self, mode):
+        if self.env.is_running():
+            image = self.env.observations()['RGB_INTERLEAVED']
+            if (self.i > 1125000):
+                cv2.imwrite("original_observations/img" + str(self.i) + ".png", image)
+        else:
+            image = self.observation_space
+        # cv2.imshow("Game Window", image)
+        # cv2.waitKey(1)
         return image
 
     def close(self):

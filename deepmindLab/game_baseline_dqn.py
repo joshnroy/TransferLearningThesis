@@ -94,15 +94,18 @@ def run():
     # model.add(Dense(nb_actions, activation='sigmoid'))
     # print(model.summary())
 
-    memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
-    policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05, nb_steps=1000000)
+    num_warmup = 50000
+    num_simulated_annealing = 1000000 + num_warmup
 
-    dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory, nb_steps_warmup=50000, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
+    memory = SequentialMemory(limit=num_simulated_annealing, window_length=WINDOW_LENGTH)
+    policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05, nb_steps=num_simulated_annealing)
+
+    dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory, nb_steps_warmup=num_warmup, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
     dqn.compile(Adam(lr=.00025), metrics=['mae'])
 
-    dqn.fit(env, nb_steps=1750000, visualize=False, verbose=1)
+    dqn.fit(env, nb_steps=num_simulated_annealing + 75000, visualize=False, verbose=1)
 
-    dqn.test(env, nb_episodes=10, visualize=False)
+    dqn.test(env, nb_episodes=10, visualize=True)
 
 if __name__ == '__main__':
     run()
