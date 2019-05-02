@@ -15,12 +15,11 @@ import deepmind_lab
 
 class SeekAvoidEnv():
     def __init__(self):
-        config = {"width": "40", "height": "40"}
+        config = {"width": "40", "height": "40", "fps": "30"}
         self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
         self.i = 0
-
 
         level_script = "seekavoid_arena_01"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
@@ -63,7 +62,7 @@ class SeekAvoidEnv():
         # self.action_space = np.zeros(len(possible_actions_tuples), dtype=np.intc)
         # self.int_codebook = self.codebook
 
-        self.action_space = np.zeros(10)
+        self.action_space = np.zeros(3)
 
 
     def seed(self, seed=None):
@@ -72,7 +71,7 @@ class SeekAvoidEnv():
     def step(self, action):
         action = action.astype(np.intc)
         action = self.convert_action(action)
-        reward = self.env.step(action, num_steps=1)
+        reward = self.env.step(action, num_steps=10)
         done = not self.env.is_running()
         self.i += 1
         if not done:
@@ -89,7 +88,7 @@ class SeekAvoidEnv():
     def render(self, mode):
         if self.env.is_running():
             image = self.env.observations()['RGB_INTERLEAVED']
-            if (self.i > 1125000):
+            if (self.i > 500000):
                 cv2.imwrite("original_observations/img" + str(self.i) + ".png", image)
         else:
             image = self.observation_space
@@ -107,27 +106,29 @@ class SeekAvoidEnv():
             action_list[0] = 25
         elif action_int == 1:
             action_list[0] = -25
+        # elif action_int == 2:
+            # action_list[1] = 25
+        # elif action_int == 3:
+            # action_list[1] = -25
+        # elif action_int == 4:
+            # action_list[2] = 1
+        # elif action_int == 5:
+            # action_list[2] = -1
+        # elif action_int == 6:
+            # action_list[3] = 1
+        # elif action_int == 7:
+            # action_list[3] = -1
+        # elif action_int == 8:
+            # action_list[4] = 1
+        # elif action_int == 9:
+            # action_list[5] = 1
+        # elif action_int == 10:
+            # action_list[6] = 1
         elif action_int == 2:
-            action_list[1] = 25
-        elif action_int == 3:
-            action_list[1] = -25
-        elif action_int == 4:
-            action_list[2] = 1
-        elif action_int == 5:
-            action_list[2] = -1
-        elif action_int == 6:
             action_list[3] = 1
-        elif action_int == 7:
-            action_list[3] = -1
-        elif action_int == 8:
-            action_list[4] = 1
-        elif action_int == 9:
-            action_list[5] = 1
-        elif action_int == 10:
-            action_list[6] = 1
 
         return action_list
 
 if __name__ == '__main__':
-    print("testing convert action function")
     env = SeekAvoidEnv()
+    print(env.env.action_spec())

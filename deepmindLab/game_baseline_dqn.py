@@ -30,7 +30,7 @@ import deepmind_lab
 
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Conv2D, BatchNormalization, MaxPooling2D, Reshape, Permute, Activation, Conv3D
-from keras.optimizers import Adam
+from keras.optimizers import Adam, RMSprop
 import keras.backend as K
 
 from rl.agents.dqn import DQNAgent
@@ -41,7 +41,7 @@ NUM_CONV_LAYERS = 3
 NUM_FILTERS = 6
 HIDDEN_SIZE = 48
 NUM_HIDDEN_LAYERS = 5
-WINDOW_LENGTH = 4
+WINDOW_LENGTH = 1
 
 def run():
     """Construct and start the environment."""
@@ -51,7 +51,8 @@ def run():
 
     input_shape = (WINDOW_LENGTH,) + env.observation_space.shape
     model = Sequential()
-    # model.add(Reshape(target_shape=input_shape, input_shape = (WINDOW_LENGTH,) + input_shape))
+    if WINDOW_LENGTH == 1:
+        model.add(Reshape(target_shape=env.observation_space.shape, input_shape = input_shape))
     # if K.image_dim_ordering() == 'tf':
     #     # (width, height, channels)
     #     model.add(Permute((2, 3, 1), input_shape=input_shape))
@@ -60,12 +61,16 @@ def run():
     #     model.add(Permute((1, 2, 3), input_shape=input_shape))
     # else:
     #     raise RuntimeError('Unknown image_dim_ordering.')
-    model.add(Conv3D(8, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first', input_shape=input_shape))
-    model.add(Activation('relu'))
-    model.add(Conv3D(16, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first'))
-    model.add(Activation('relu'))
-    # model.add(Conv2D(64, (3, 3), strides=(1, 1)))
-    # model.add(Activation('relu'))
+    if WINDOW_LENGTH == 1:
+        model.add(Conv2D(8, (3, 3), strides=(2, 2), input_shape=input_shape))
+        model.add(Activation('relu'))
+        model.add(Conv2D(16, (3, 3), strides=(2, 2)))
+        model.add(Activation('relu'))
+    else:
+        model.add(Conv3D(8, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first', input_shape=input_shape))
+        model.add(Activation('relu'))
+        model.add(Conv3D(16, (3, 3, 1), strides=(2, 2, 1), data_format='channels_first'))
+        model.add(Activation('relu'))
     model.add(Flatten())
     model.add(Dense(128))
     model.add(Activation('relu'))
@@ -95,15 +100,17 @@ def run():
     # print(model.summary())
 
     num_warmup = 50000
-    num_simulated_annealing = 1000000 + num_warmup
+    num_simulated_annealing = 300000 + num_warmup
 
-    memory = SequentialMemory(limit=num_simulated_annealing, window_length=WINDOW_LENGTH)
+    memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
     policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05, nb_steps=num_simulated_annealing)
 
     dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory, nb_steps_warmup=num_warmup, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
     dqn.compile(Adam(lr=.00025), metrics=['mae'])
+    # dqn.compile(RMSprop(lr=.00025), metrics=['mae'])
 
-    dqn.fit(env, nb_steps=num_simulated_annealing + 75000, visualize=False, verbose=1)
+    history = dqn.fit(env, nb_steps=num_simulated_annealing + 150000, visualize=False, verbose=1)
+    np.savez_compressed("dqn_RMSprop_visual_history", episode_reward=np.asarray(history.history['episode_reward']))
 
     dqn.test(env, nb_episodes=10, visualize=True)
 
