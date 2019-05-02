@@ -33,6 +33,8 @@ from keras.layers import Dense, Flatten, Conv2D, BatchNormalization, MaxPooling2
 from keras.optimizers import Adam, RMSprop
 import keras.backend as K
 
+from keras.utils import multi_gpu_model
+
 from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy, LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.memory import SequentialMemory
@@ -42,6 +44,8 @@ NUM_FILTERS = 6
 HIDDEN_SIZE = 48
 NUM_HIDDEN_LAYERS = 5
 WINDOW_LENGTH = 1
+
+MULTI_GPU = False
 
 def run():
     """Construct and start the environment."""
@@ -77,6 +81,9 @@ def run():
     model.add(Dense(nb_actions))
     model.add(Activation('linear'))
     print(model.summary())
+    if MULTI_GPU:
+        model = multi_gpu_model(model, gpus=2)
+        print(model.summary())
 
     # model = Sequential()
     # num_filters = NUM_FILTERS
