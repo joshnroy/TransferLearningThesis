@@ -15,7 +15,7 @@ import deepmind_lab
 
 class SeekAvoidEnv():
     def __init__(self):
-        config = {"width": "40", "height": "40", "fps": "30"}
+        config = {"width": "400", "height": "400", "fps": "30", "wallColor": "1", "floorColor": "1"}
         self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
@@ -129,6 +129,11 @@ class SeekAvoidEnv():
 
         return action_list
 
+    def save_img(self, name):
+        img = self.render(None)
+        cv2.imwrite("original_observations/" + name + ".png", img)
+
 if __name__ == '__main__':
     env = SeekAvoidEnv()
-    print(env.env.action_spec())
+    env.reset()
+    env.save_img("test_img")
