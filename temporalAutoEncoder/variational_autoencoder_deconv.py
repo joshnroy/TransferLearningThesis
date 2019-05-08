@@ -130,7 +130,7 @@ if False:
     input_shape = (image_size, image_size, 1)
 else:
     # Cartpole Dataset
-    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/*.jpg")])
+    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/*.png")])
     x_train = imgs[:-100]
     x_test = imgs[-100:]
     x_train = x_train.astype('float32') / 255
@@ -138,22 +138,14 @@ else:
     y_train = np.array([])
     y_test = np.array([])
     image_size = x_train.shape[1]
-    # print(x_train.shape, image_size)
-    # sys.exit()
     input_shape = (image_size, image_size, 3)
 
 # network parameters
 batch_size = 128
 kernel_size = 3
-<<<<<<< HEAD
 filters = 16
-latent_dim = 48
+latent_dim = 512
 epochs = 100000
-=======
-filters = 32
-latent_dim = 48
-epochs = 2000
->>>>>>> 2560b68e8601966fe4741f1caa9be3dcd8d76611
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -172,7 +164,7 @@ shape = K.int_shape(x)
 
 # generate latent vector Q(z|X)
 x = Flatten()(x)
-x = Dense(16, activation='relu')(x)
+x = Dense(512, activation='relu')(x)
 z_mean = Dense(latent_dim, name='z_mean')(x)
 z_log_var = Dense(latent_dim, name='z_log_var')(x)
 
