@@ -147,19 +147,20 @@ filters = 32
 latent_dim = 512
 rp_dim = 256
 s_dim = latent_dim - rp_dim
+num_conv = 3
 
 rp_l2_loss_weight = 100.
 s_l2_loss_weight = 1.
 s_l0_loss_weight = 10.
 
 batch_size = 128
-epochs = 500
+epochs = 5000
 
 # VAE model = encoder + decoder
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
 x = inputs
-for i in range(2):
+for i in range(num_conv):
     filters *= 2
     x = Conv2D(filters=filters,
                kernel_size=kernel_size,
@@ -172,7 +173,7 @@ shape = K.int_shape(x)
 
 # generate latent vector Q(z|X)
 x = Flatten()(x)
-x = Dense(128, activation='relu')(x)
+x = Dense(1024, activation='relu')(x)
 z_mean = Dense(latent_dim, name='z_mean')(x)
 z_log_var = Dense(latent_dim, name='z_log_var')(x)
 
@@ -187,10 +188,11 @@ plot_model(encoder, to_file='factored_vae_encoder.png', show_shapes=True)
 
 # build decoder model
 latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(latent_inputs)
+x = Dense(1024, activation='relu')(latent_inputs)
+x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(x)
 x = Reshape((shape[1], shape[2], shape[3]))(x)
 
-for i in range(2):
+for i in range(num_conv):
     x = Conv2DTranspose(filters=filters,
                         kernel_size=kernel_size,
                         activation='relu',
@@ -280,16 +282,17 @@ if __name__ == '__main__':
                 epoch_losses.append(np.mean(losses))
                 if epoch % 50 == 0:
                     print("testing")
+                    vae.save('factored_vae_deepmind_model7_factored.h5')
                     predicted_imgs = vae.predict(x_test, batch_size=batch_size)
                     x_test_scaled = 255. * x_test
                     predicted_imgs_scaled = 255. * predicted_imgs
                     for i in range(len(predicted_imgs)):
-                        cv2.imwrite("images/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
-                        cv2.imwrite("images/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
+                        cv2.imwrite("images7/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
+                        cv2.imwrite("images7/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):
-                        imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/training_data_" + str(i) + "_*.png")])
+                        imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/obs_" + str(i) + "_*.png")])
                         imgs_batch = imgs / 255.
                         outputs = encoder.predict_on_batch(imgs_batch)
                         predicted_z = outputs[2]
@@ -311,7 +314,7 @@ if __name__ == '__main__':
                     epochs=epochs,
                     batch_size=batch_size,
                     validation_data=(x_test, None))
-        vae.save('factored_vae_deepmind_model1_factored.h5')
+        vae.save('factored_vae_deepmind_model7_factored.h5')
 
 # Test the autoencoder
     # if True:
@@ -324,7 +327,7 @@ if __name__ == '__main__':
     # else:
     #     test_losses = 0.
     #     for i in range(99):
-    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/training_data_" + str(i) + "_*.jpg")])
+    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/obs_" + str(i) + "_*.jpg")])
     #         imgs_batch = imgs / 255.
     #         loss = vae.predict_on_batch(imgs_batch)
     #         # print("epoch", epoch, "episode", i, "loss", loss, "batch size", imgs_batch.shape[0])

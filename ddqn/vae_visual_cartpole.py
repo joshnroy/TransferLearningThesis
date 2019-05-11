@@ -60,7 +60,7 @@ outputs = concatenate([outputs, vel_input])
 outputs = Dense(HIDDEN_LAYER_SIZE, activation='relu')(outputs)
 outputs = Dense(nb_actions, activation='linear')(outputs)
 model = Model(inputs, outputs)
-print(model.summary())
+# print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
@@ -82,9 +82,9 @@ dqn.compile(Adam(lr=1e-3), metrics=['mae'])
 dqn.load_weights('vae_dqn_{}_weights.h5f'.format(ENV_NAME))
 
 # Finally, evaluate our algorithm for 5 episodes.
-print("Test on original colors")
+# print("Test on original colors")
 dqn.test(env, nb_episodes=10, visualize=False)
 
-print("Test on changed colors")
+# print("Test on changed colors")
 env.change_color()
 dqn.test(env, nb_episodes=10, visualize=False)

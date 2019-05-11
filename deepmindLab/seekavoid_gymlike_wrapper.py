@@ -89,7 +89,7 @@ class SeekAvoidEnv():
         if self.env.is_running():
             image = self.env.observations()['RGB_INTERLEAVED']
             if (self.i > 500000):
-                cv2.imwrite("original_observations/img" + str(self.i) + ".png", image)
+                cv2.imwrite("factored_vae_dqn_imgs/img" + str(self.i) + ".png", image)
         else:
             image = self.observation_space
         # cv2.imshow("Game Window", image)
