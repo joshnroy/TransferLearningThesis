@@ -145,7 +145,7 @@ batch_size = 128
 kernel_size = 3
 filters = 16
 latent_dim = 512
-epochs = 100000
+epochs = 20000
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -223,13 +223,15 @@ if __name__ == '__main__':
                                                   K.flatten(outputs))
 
     reconstruction_loss *= image_size * image_size
+    beta = 1.
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5
+    kl_loss *= -0.5 * beta
     vae_loss = K.mean(reconstruction_loss + kl_loss)
     vae.add_loss(vae_loss)
     learning_rate = 1e-3
-    decay = learning_rate / epochs
+    # decay = learning_rate / epochs
+    decay = 0.
     adam = Adam(lr=learning_rate, decay=decay)
     vae.compile(optimizer=adam)
     vae.summary()
@@ -243,14 +245,14 @@ if __name__ == '__main__':
         kl_loss *= -0.5
         vae_loss = K.mean(reconstruction_loss + kl_loss)
         vae.add_loss(vae_loss)
-        vae.save('vae_cnn_cartpole_model.h5')
+        vae.save_weights('vae_cnn_cartpole_model.h5')
     else:
         # train the autoencoder
         vae.fit(x_train,
                 epochs=epochs,
                 batch_size=batch_size,
                 validation_data=(x_test, None))
-        vae.save('vae_cnn_cartpole_model.h5')
+        vae.save_weights('vae_cnn_cartpole_model.h4')
 
 # Test the autoencoder
     predicted_imgs = vae.predict(x_test, batch_size=batch_size)

@@ -75,14 +75,14 @@ class SeekAvoidEnv():
         done = not self.env.is_running()
         self.i += 1
         if not done:
-            observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
+            observations = np.asarray(self.env.observations()['RGB_INTERLEAVED']) / 255.
         else:
             observations = self.observation_space
         return observations, reward, done, {}
 
     def reset(self):
         self.env.reset()
-        observations = np.asarray(self.env.observations()['RGB_INTERLEAVED'])
+        observations = np.asarray(self.env.observations()['RGB_INTERLEAVED']) / 255.
         return observations
 
     def render(self, mode):

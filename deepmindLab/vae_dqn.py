@@ -63,20 +63,17 @@ def run():
     print(input_shape)
     in_layer = Input(shape=input_shape)
     reshaped = Reshape(target_shape=env.observation_space.shape)(in_layer)
-    s_output_layer = Lambda(lambda x: x)(vae.layers[-2].outputs[2])
-    # s_output_layer = Lambda(lambda x: x[:, 256:])(vae.layers[-2].outputs[2])
+    # s_output_layer = Lambda(lambda x: x)(vae.layers[-2].outputs[2])
+    s_output_layer = Lambda(lambda x: x[:, 256:])(vae.layers[-2].outputs[2])
     vae = Model(vae.inputs, [s_output_layer])
     for layer in vae.layers:
         layer.trainable = False
     print(vae.summary())
     vae_output = vae(reshaped)
 
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(vae_output)
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_normal', bias_initializer='zeros')(x)
+    x = Dense(48, activation='relu')(vae_output)
+    for _ in range(4):
+        x = Dense(48, activation='relu')(x)
     x = Dense(nb_actions, activation='linear')(x)
     model = Model(in_layer, [x])
     print(model.summary())
@@ -94,7 +91,7 @@ def run():
     dqn.compile(Adam(lr=.25 * 1e-3), metrics=['mae'])
 
     history = dqn.fit(env, nb_steps=num_simulated_annealing + 150000, visualize=False, verbose=1)
-    np.savez_compressed("vae_dqn_history4", episode_reward=np.asarray(history.history['episode_reward']))
+    np.savez_compressed("vae_dqn_history5", episode_reward=np.asarray(history.history['episode_reward']))
 
     dqn.test(env, nb_episodes=10, visualize=True)
 
