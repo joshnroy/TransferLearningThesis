@@ -89,7 +89,7 @@ class SeekAvoidEnv():
         if self.env.is_running():
             image = self.env.observations()['RGB_INTERLEAVED']
             if (self.i > 500000):
-                cv2.imwrite("factored_vae_dqn_imgs/img" + str(self.i) + ".png", image)
+                cv2.imwrite("images/img" + str(self.i) + ".png", image)
         else:
             image = self.observation_space
         # cv2.imshow("Game Window", image)
@@ -103,9 +103,9 @@ class SeekAvoidEnv():
         action_list = np.zeros(7, np.intc)
 
         if action_int == 0:
-            action_list[0] = 25
+            action_list[0] = 50
         elif action_int == 1:
-            action_list[0] = -25
+            action_list[0] = -50
         # elif action_int == 2:
             # action_list[1] = 25
         # elif action_int == 3:
