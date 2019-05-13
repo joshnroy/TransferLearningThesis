@@ -103,9 +103,9 @@ class SeekAvoidEnv():
         action_list = np.zeros(7, np.intc)
 
         if action_int == 0:
-            action_list[0] = 50
+            action_list[0] = 25
         elif action_int == 1:
-            action_list[0] = -50
+            action_list[0] = -25
         # elif action_int == 2:
             # action_list[1] = 25
         # elif action_int == 3:
