@@ -154,7 +154,7 @@ s_l2_loss_weight = 1.
 s_l0_loss_weight = 10.
 
 batch_size = 128
-epochs = 5000
+epochs = 20
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     reconstruction_loss *= image_size * image_size
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
-    beta = 1new_arch5.
+    beta = 175.
     kl_loss *= -0.5 * beta
 
     rp_l2_loss = rp_l2_loss_weight * K.mean(K.square(z[1:, :rp_dim] - z[:-1, :rp_dim]))
@@ -271,7 +271,7 @@ if __name__ == '__main__':
             for epoch in range(epochs):
                 losses = []
                 for i in range(10):
-                    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/obs_" + str(i) + "_*.png")])
+                    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.png")])
                     imgs_batch = imgs / 255.
                     loss = vae.train_on_batch(imgs_batch, y=None)
                     losses.append(loss)
@@ -289,7 +289,7 @@ if __name__ == '__main__':
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):
-                        imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/obs_" + str(i) + "_*.png")])
+                        imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.png")])
                         imgs_batch = imgs / 255.
                         outputs = encoder.predict_on_batch(imgs_batch)
                         predicted_z = outputs[2]
@@ -324,7 +324,7 @@ if __name__ == '__main__':
     # else:
     #     test_losses = 0.
     #     for i in range(99):
-    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/obs_" + str(i) + "_*.jpg")])
+    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.jpg")])
     #         imgs_batch = imgs / 255.
     #         loss = vae.predict_on_batch(imgs_batch)
     #         # print("epoch", epoch, "episode", i, "loss", loss, "batch size", imgs_batch.shape[0])
