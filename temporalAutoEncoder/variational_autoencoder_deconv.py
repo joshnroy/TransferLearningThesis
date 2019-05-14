@@ -40,7 +40,7 @@ import sys
 # instead of sampling from Q(z|X), sample eps = N(0,I)
 # then z = z_mean + sqrt(var)*eps
 def sampling(args):
-    """Reparameterization trick by sampling fr an isotropic unit Gaussian.  
+    """Reparameterization trick by sampling fr an isotropic unit Gaussian.
     # Arguments
         args (tensor): mean and log of variance of Q(z|X)
 
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     kl_loss *= -0.5 * beta
     vae_loss = K.mean(reconstruction_loss + kl_loss)
     vae.add_loss(vae_loss)
-    learning_rate = 1e-4
+    learning_rate = 1e-3
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()

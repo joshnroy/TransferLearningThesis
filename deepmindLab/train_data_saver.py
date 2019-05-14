@@ -40,12 +40,13 @@ def run():
 
     for i in trange(NUM_DATA_SAMPLES):
         observations = env.reset()
+        observations *= 255.
         done = False
         j = 0
         while not done:
             cv2.imwrite("training_observations/obs_" + str(i) + "_" + str(j) + ".png", observations)
-            # print(observations.shape)
             observations, reward, done, _ = env.step(np.random.randint(0, high=nb_actions))
+            observations *= 255.
             j += 1
 
 if __name__ == '__main__':
