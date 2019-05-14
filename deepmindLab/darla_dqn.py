@@ -40,9 +40,9 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import BoltzmannQPolicy, LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.memory import SequentialMemory
 
-from factored_variational_autoencoder_deconv import vae
+from variational_autoencoder_deconv import vae
 
-WEIGHTS_FILE = "../temporalAutoEncoder/temporal_beta_vae.h5"
+WEIGHTS_FILE = "../temporalAutoEncoder/darla_beta_vae.h5"
 
 HIDDEN_SIZE = 256
 NUM_HIDDEN_LAYERS = 5
@@ -61,8 +61,7 @@ def run():
     print("#########################")
     original_input = Input(shape=(WINDOW_LENGTH,) + env.observation_space.shape)
     in_layer = [Lambda(lambda x: x[:, i, :, :])(original_input) for i in range(WINDOW_LENGTH)]
-    s_output_layer = Lambda(lambda x: x[:, 32:])(vae.layers[-2].outputs[2])
-    vae = Model(vae.inputs, [s_output_layer])
+    vae = Model(vae.inputs, [vae.layers[-2].outputs[2]])
     for layer in vae.layers:
         layer.trainable = False
     print(vae.summary())

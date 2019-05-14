@@ -117,7 +117,7 @@ def run():
     # dqn.compile(RMSprop(lr=.00025), metrics=['mae'])
 
     history = dqn.fit(env, nb_steps=num_simulated_annealing + 150000, visualize=False, verbose=1)
-    np.savez_compressed("dqn_RMSprop_visual_history", episode_reward=np.asarray(history.history['episode_reward']))
+    np.savez_compressed("dqn_visual_history", episode_reward=np.asarray(history.history['episode_reward']))
 
     dqn.test(env, nb_episodes=10, visualize=True)
 

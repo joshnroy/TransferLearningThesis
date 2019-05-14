@@ -130,7 +130,7 @@ if False:
     input_shape = (image_size, image_size, 1)
 else:
     # Cartpole Dataset
-    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/*.png")])
+    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/*.png")])
     x_train = imgs[:-100]
     x_test = imgs[-100:]
     x_train = x_train.astype('float32') / 255
@@ -142,29 +142,26 @@ else:
 
 # network parameters
 batch_size = 128
-kernel_size = 3
-filters = 16
-latent_dim = 512
-epochs = 20000
+latent_dim = 64
+epochs = 20
 
 # VAE model = encoder + decoder
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
 x = inputs
-for i in range(2):
-    filters *= 2
-    x = Conv2D(filters=filters,
-               kernel_size=kernel_size,
-               activation='relu',
-               strides=2,
-               padding='same')(x)
+# for i in range(2):
+#     filters *= 2
+x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
 
-# shape info needed to build decoder model
+# shape info needed to build decoder
 shape = K.int_shape(x)
 
 # generate latent vector Q(z|X)
 x = Flatten()(x)
-x = Dense(512, activation='relu')(x)
+x = Dense(256, activation='relu')(x)
 z_mean = Dense(latent_dim, name='z_mean')(x)
 z_log_var = Dense(latent_dim, name='z_log_var')(x)
 
@@ -179,22 +176,21 @@ plot_model(encoder, to_file='vae_cnn_encoder.png', show_shapes=True)
 
 # build decoder model
 latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(latent_inputs)
+x = Dense(256, activation='relu')(latent_inputs)
+x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(x)
 x = Reshape((shape[1], shape[2], shape[3]))(x)
 
-for i in range(2):
-    x = Conv2DTranspose(filters=filters,
-                        kernel_size=kernel_size,
-                        activation='relu',
-                        strides=2,
-                        padding='same')(x)
-    filters //= 2
+x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
 
 outputs = Conv2DTranspose(filters=3,
-                          kernel_size=kernel_size,
+                          kernel_size=1,
+                          strides=1,
                           activation='sigmoid',
-                          padding='same',
-                          name='decoder_output')(x)
+                          padding='same')(x)
+outputs = Lambda(lambda x: x[:, :84, :84, :], name='decoder_output')(outputs)
 
 # instantiate decoder model
 decoder = Model(latent_inputs, outputs, name='decoder')
@@ -223,16 +219,14 @@ if __name__ == '__main__':
                                                   K.flatten(outputs))
 
     reconstruction_loss *= image_size * image_size
-    beta = 1.
+    beta = 175.
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
     kl_loss *= -0.5 * beta
     vae_loss = K.mean(reconstruction_loss + kl_loss)
     vae.add_loss(vae_loss)
-    learning_rate = 1e-3
-    # decay = learning_rate / epochs
-    decay = 0.
-    adam = Adam(lr=learning_rate, decay=decay)
+    learning_rate = 1e-4
+    adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
     plot_model(vae, to_file='vae_cnn.png', show_shapes=True)
@@ -252,7 +246,7 @@ if __name__ == '__main__':
                 epochs=epochs,
                 batch_size=batch_size,
                 validation_data=(x_test, None))
-        vae.save_weights('vae_cnn_cartpole_model.h4')
+        vae.save_weights('darla_beta_vae.h5')
 
 # Test the autoencoder
     predicted_imgs = vae.predict(x_test, batch_size=batch_size)

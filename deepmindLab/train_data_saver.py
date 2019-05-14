@@ -30,7 +30,7 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 import deepmind_lab
 
 
-NUM_DATA_SAMPLES = 10
+NUM_DATA_SAMPLES = 100
 
 def run():
     """Construct and start the environment."""

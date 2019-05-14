@@ -131,7 +131,7 @@ if False:
     input_shape = (image_size, image_size, 1)
 else:
     # deepmind Dataset
-    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_data/*.png")])
+    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/*.png")])
     x_train = imgs[:-100]
     x_test = imgs[-100:]
     x_train = x_train.astype('float32') / 255
@@ -144,8 +144,8 @@ else:
 # network parameters
 kernel_size = 3
 filters = 32
-latent_dim = 512
-rp_dim = 256
+latent_dim = 64
+rp_dim = 32
 s_dim = latent_dim - rp_dim
 num_conv = 3
 
@@ -160,20 +160,19 @@ epochs = 5000
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
 x = inputs
-for i in range(num_conv):
-    filters *= 2
-    x = Conv2D(filters=filters,
-               kernel_size=kernel_size,
-               activation='relu',
-               strides=2,
-               padding='same')(x)
+# for i in range(2):
+#     filters *= 2
+x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
 
-# shape info needed to build decoder model
+# shape info needed to build decoder
 shape = K.int_shape(x)
 
 # generate latent vector Q(z|X)
 x = Flatten()(x)
-x = Dense(1024, activation='relu')(x)
+x = Dense(256, activation='relu')(x)
 z_mean = Dense(latent_dim, name='z_mean')(x)
 z_log_var = Dense(latent_dim, name='z_log_var')(x)
 
@@ -188,23 +187,21 @@ plot_model(encoder, to_file='factored_vae_encoder.png', show_shapes=True)
 
 # build decoder model
 latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(1024, activation='relu')(latent_inputs)
+x = Dense(256, activation='relu')(latent_inputs)
 x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(x)
 x = Reshape((shape[1], shape[2], shape[3]))(x)
 
-for i in range(num_conv):
-    x = Conv2DTranspose(filters=filters,
-                        kernel_size=kernel_size,
-                        activation='relu',
-                        strides=2,
-                        padding='same')(x)
-    filters //= 2
+x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
 
 outputs = Conv2DTranspose(filters=3,
-                          kernel_size=kernel_size,
+                          kernel_size=1,
+                          strides=1,
                           activation='sigmoid',
-                          padding='same',
-                          name='decoder_output')(x)
+                          padding='same')(x)
+outputs = Lambda(lambda x: x[:, :84, :84, :], name='decoder_output')(outputs)
 
 # instantiate decoder model
 decoder = Model(latent_inputs, outputs, name='decoder')
@@ -235,7 +232,8 @@ if __name__ == '__main__':
     reconstruction_loss *= image_size * image_size
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5
+    beta = 1new_arch5.
+    kl_loss *= -0.5 * beta
 
     rp_l2_loss = rp_l2_loss_weight * K.mean(K.square(z[1:, :rp_dim] - z[:-1, :rp_dim]))
     s_l2_loss = s_l2_loss_weight * K.mean(K.square(z[1:, s_dim:] - z[:-1, s_dim:]))
@@ -249,7 +247,6 @@ if __name__ == '__main__':
     vae.add_loss(vae_loss)
 
     learning_rate = 1e-4
-    decay = learning_rate / epochs
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
@@ -282,13 +279,13 @@ if __name__ == '__main__':
                 epoch_losses.append(np.mean(losses))
                 if epoch % 50 == 0:
                     print("testing")
-                    vae.save('factored_vae_deepmind_model7_factored.h5')
+                    vae.save('factored_vae_deepmind_modelnew_arch_factored.h5')
                     predicted_imgs = vae.predict(x_test, batch_size=batch_size)
                     x_test_scaled = 255. * x_test
                     predicted_imgs_scaled = 255. * predicted_imgs
                     for i in range(len(predicted_imgs)):
-                        cv2.imwrite("images7/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
-                        cv2.imwrite("images7/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
+                        cv2.imwrite("imagesnew_arch/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
+                        cv2.imwrite("imagesnew_arch/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):
@@ -314,7 +311,7 @@ if __name__ == '__main__':
                     epochs=epochs,
                     batch_size=batch_size,
                     validation_data=(x_test, None))
-        vae.save('factored_vae_deepmind_model7_factored.h5')
+        vae.save('factored_vae_deepmind_modelnew_arch_factored.h5')
 
 # Test the autoencoder
     # if True:
