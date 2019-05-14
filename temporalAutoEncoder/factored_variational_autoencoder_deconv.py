@@ -153,8 +153,8 @@ rp_l2_loss_weight = 100.
 s_l2_loss_weight = 1.
 s_l0_loss_weight = 10.
 
-batch_size = 128
-epochs = 20
+batch_size = 300
+epochs = 200
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     reconstruction_loss *= image_size * image_size
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
-    beta = 175.
+    beta = 1.
     kl_loss *= -0.5 * beta
 
     rp_l2_loss = rp_l2_loss_weight * K.mean(K.square(z[1:, :rp_dim] - z[:-1, :rp_dim]))
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     vae_loss = K.mean(reconstruction_loss + kl_loss + rp_l2_loss - s_l2_loss + s_l0_loss)
     vae.add_loss(vae_loss)
 
-    learning_rate = 1e-4
+    learning_rate = 1e-3
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
@@ -284,8 +284,8 @@ if __name__ == '__main__':
                     x_test_scaled = 255. * x_test
                     predicted_imgs_scaled = 255. * predicted_imgs
                     for i in range(len(predicted_imgs)):
-                        cv2.imwrite("imagesnew_arch/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
-                        cv2.imwrite("imagesnew_arch/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
+                        cv2.imwrite("images_new_arch3/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
+                        cv2.imwrite("images_new_arch3/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):

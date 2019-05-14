@@ -130,7 +130,7 @@ if False:
     input_shape = (image_size, image_size, 1)
 else:
     # Cartpole Dataset
-    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/*.png")])
+    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/*.png")])
     x_train = imgs[:-100]
     x_test = imgs[-100:]
     x_train = x_train.astype('float32') / 255
@@ -143,7 +143,7 @@ else:
 # network parameters
 batch_size = 128
 latent_dim = 64
-epochs = 20
+epochs = 100
 
 # VAE model = encoder + decoder
 # build encoder model
@@ -219,7 +219,7 @@ if __name__ == '__main__':
                                                   K.flatten(outputs))
 
     reconstruction_loss *= image_size * image_size
-    beta = 175.
+    beta = 1.
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
     kl_loss *= -0.5 * beta
