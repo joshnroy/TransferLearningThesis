@@ -15,7 +15,7 @@ import deepmind_lab
 
 class SeekAvoidEnv():
     def __init__(self):
-        config = {"width": "64", "height": "64", "fps": "30"}
+        config = {"width": "84", "height": "84", "fps": "60"}
         self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
@@ -24,43 +24,6 @@ class SeekAvoidEnv():
         level_script = "contributed/dmlab30/rooms_collect_good_objects_train"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
         # self.window = cv2.namedWindow("Game Window", cv2.WINDOW_NORMAL)
-
-# Create huffman encoding of actions
-        # possible_actions = []
-        # print("Adding ", self.env.action_spec()[0]['name'])
-
-        # for i in range(self.env.action_spec()[0]['min'], self.env.action_spec()[0]['max'], self.look_degree_step):
-        # for i in range(-200, 200, self.look_degree_step):
-        #     possible_actions.append([i])
-        # print(len(possible_actions))
-
-        # x = self.env.action_spec()[1]
-        # print("Adding ", x['name'], len(possible_actions))
-        # possible_actions_copy = possible_actions
-        # possible_actions = []
-        # for short_action in possible_actions_copy:
-        #     for i in range(-200, 200, self.look_degree_step):
-        #         to_add = deepcopy(short_action)
-        #         to_add.append(i)
-        #         possible_actions.append(to_add)
-
-        # for x in self.env.action_spec()[2:]:
-        #     print(x['name'], len(possible_actions), x['min'], x['max'], range(x['min'], x['max']+1))
-        #     possible_actions_copy = possible_actions
-        #     possible_actions = []
-        #     for short_action in possible_actions_copy:
-        #         for i in range(x['min'], x['max'] + 1):
-        #             to_add = deepcopy(short_action)
-        #             to_add.append(i)
-        #             possible_actions.append(to_add)
-        # possible_actions_tuples = []
-        # for x in possible_actions:
-        #     assert(len(x) == 7)
-        #     possible_actions_tuples.append(tuple(x))
-
-        # self.codebook = {i: x for i, x, in enumerate(possible_actions_tuples)}
-        # self.action_space = np.zeros(len(possible_actions_tuples), dtype=np.intc)
-        # self.int_codebook = self.codebook
 
         self.action_space = np.zeros(3)
 
@@ -106,24 +69,6 @@ class SeekAvoidEnv():
             action_list[0] = 25
         elif action_int == 1:
             action_list[0] = -25
-        # elif action_int == 2:
-            # action_list[1] = 25
-        # elif action_int == 3:
-            # action_list[1] = -25
-        # elif action_int == 4:
-            # action_list[2] = 1
-        # elif action_int == 5:
-            # action_list[2] = -1
-        # elif action_int == 6:
-            # action_list[3] = 1
-        # elif action_int == 7:
-            # action_list[3] = -1
-        # elif action_int == 8:
-            # action_list[4] = 1
-        # elif action_int == 9:
-            # action_list[5] = 1
-        # elif action_int == 10:
-            # action_list[6] = 1
         elif action_int == 2:
             action_list[3] = 1
 
