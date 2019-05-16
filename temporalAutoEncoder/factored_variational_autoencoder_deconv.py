@@ -144,14 +144,14 @@ else:
 
 # network parameters
 kernel_size = 3
-latent_dim = 32
-rp_dim = 16
+latent_dim = 64
+rp_dim = 32
 s_dim = latent_dim - rp_dim
 num_conv = 3
 
-rp_l2_loss_weight = 100.
-s_l2_loss_weight = 1.
-s_l0_loss_weight = 10.
+rp_l2_loss_weight = 0.
+s_l2_loss_weight = 0.
+s_l0_loss_weight = 0.
 
 batch_size = 128
 epochs = 670
@@ -255,7 +255,7 @@ if __name__ == '__main__':
     normalized_s = s_difference
     s_l0_loss = s_l0_loss_weight * -1 * K.mean((normalized_s + 1e-5) * (K.log((normalized_s + 1e-5))))
 
-    vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss - s_l2_loss + s_l0_loss)
+    vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
     vae.add_loss(vae_loss)
 
     learning_rate = 1e-4
@@ -302,7 +302,7 @@ if __name__ == '__main__':
                               "s L2 loss", np.mean(s_l2_loss_weight * (predicted_z[1:, s_dim:] - predicted_z[:-1, s_dim:])**2),
                               "s Entropy loss", np.mean(s_l0_loss_weight * -1 * (normalized_s + 1e-5) * np.log((normalized_s + 1e-5))))
                         print("RP Min", np.min(predicted_z[0, :rp_dim]),"RP Mean", np.mean(predicted_z[0, :rp_dim]), "RP Max", np.max(predicted_z[0, :rp_dim]))
-                        print("S Min", np.min(predicted_z[0, s_dim:]), "S Max", np.max(predicted_z[0, s_dim:]), "S Mean", np.mean(predicted_z[0, s_dim:]))
+                        print("S Min", np.min(predicted_z[0, s_dim:]), "S Mean", np.mean(predicted_z[0, s_dim:]), "S Max", np.max(predicted_z[0, s_dim:]))
                         print("\n")
 
             np.savez_compressed("jaco_vae_history", epoch_losses=np.asarray(epoch_losses))
