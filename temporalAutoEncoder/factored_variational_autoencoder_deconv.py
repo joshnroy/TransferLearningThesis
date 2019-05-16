@@ -34,6 +34,7 @@ import os
 import glob
 import cv2
 import sys
+from tqdm import trange
 
 
 # reparameterization trick
@@ -131,7 +132,7 @@ if False:
     input_shape = (image_size, image_size, 1)
 else:
     # deepmind Dataset
-    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/*.png")])
+    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/*.png")])
     x_train = imgs[:-100]
     x_test = imgs[-100:]
     x_train = x_train.astype('float32') / 255
@@ -143,9 +144,8 @@ else:
 
 # network parameters
 kernel_size = 3
-filters = 32
-latent_dim = 64
-rp_dim = 32
+latent_dim = 32
+rp_dim = 16
 s_dim = latent_dim - rp_dim
 num_conv = 3
 
@@ -153,63 +153,72 @@ rp_l2_loss_weight = 100.
 s_l2_loss_weight = 1.
 s_l0_loss_weight = 10.
 
-batch_size = 300
-epochs = 200
+batch_size = 128
+epochs = 670
 
-# VAE model = encoder + decoder
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
-x = inputs
-# for i in range(2):
-#     filters *= 2
-x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(inputs)
+x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
+x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
+x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
 
-# shape info needed to build decoder
-shape = K.int_shape(x)
+x_inputs = Flatten()(x_inputs)
+x_inputs = Dense(256, activation='relu')(x_inputs)
+z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
+z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
 
-# generate latent vector Q(z|X)
-x = Flatten()(x)
-x = Dense(256, activation='relu')(x)
-z_mean = Dense(latent_dim, name='z_mean')(x)
-z_log_var = Dense(latent_dim, name='z_log_var')(x)
-
-# use reparameterization trick to push the sampling out as input
-# note that "output_shape" isn't necessary with the TensorFlow backend
 z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
+
+
+
+
 
 # instantiate encoder model
 encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
 encoder.summary()
-plot_model(encoder, to_file='factored_vae_encoder.png', show_shapes=True)
+
+
+
+
+
 
 # build decoder model
-latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(256, activation='relu')(latent_inputs)
-x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(x)
-x = Reshape((shape[1], shape[2], shape[3]))(x)
+latent_inputs = Input(shape=(latent_dim,))
+x_decoder = Dense(256, activation='relu')(latent_inputs)
+x_decoder = Dense(4 * 4 * 64, activation='relu')(x_decoder)
+x_decoder = Reshape((4, 4, 64))(x_decoder)
 
-x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
 
-outputs = Conv2DTranspose(filters=3,
-                          kernel_size=1,
-                          strides=1,
-                          activation='sigmoid',
-                          padding='same')(x)
-outputs = Lambda(lambda x: x[:, :84, :84, :], name='decoder_output')(outputs)
+x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1,
+                            activation='sigmoid', padding='same')(x_decoder)
+
+
+
+
 
 # instantiate decoder model
-decoder = Model(latent_inputs, outputs, name='decoder')
+decoder = Model(latent_inputs, x_decoder, name='decoder')
 decoder.summary()
-plot_model(decoder, to_file='factored_vae_decoder.png', show_shapes=True)
+
+
+
 
 # instantiate VAE model
-outputs = decoder(encoder(inputs)[2])
+encoder_outputs = encoder(inputs)
+outputs = [encoder_outputs[0], encoder_outputs[1], decoder(encoder_outputs[2])]
 vae = Model(inputs, outputs, name='vae')
 
 if __name__ == '__main__':
@@ -224,17 +233,20 @@ if __name__ == '__main__':
 
     # VAE loss = mse_loss or xent_loss + kl_loss
     if args.mse:
-        reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs))
+        reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs[2]))
     else:
         reconstruction_loss = binary_crossentropy(K.flatten(inputs),
                                                   K.flatten(outputs))
 
     reconstruction_loss *= image_size * image_size
-    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-    kl_loss = K.sum(kl_loss, axis=-1)
-    beta = 1.
-    kl_loss *= -0.5 * beta
 
+    beta = 175.
+    kl_loss = 1 + outputs[1] - K.square(outputs[0]) - K.exp(outputs[1])
+    kl_loss = K.sum(kl_loss, axis=-1)
+    kl_loss *= -0.5
+
+
+    z = outputs[2]
     rp_l2_loss = rp_l2_loss_weight * K.mean(K.square(z[1:, :rp_dim] - z[:-1, :rp_dim]))
     s_l2_loss = s_l2_loss_weight * K.mean(K.square(z[1:, s_dim:] - z[:-1, s_dim:]))
     s_difference = K.abs(z[1:, s_dim:] - z[:-1, s_dim:]) + 1e-5
@@ -243,75 +255,63 @@ if __name__ == '__main__':
     normalized_s = s_difference
     s_l0_loss = s_l0_loss_weight * -1 * K.mean((normalized_s + 1e-5) * (K.log((normalized_s + 1e-5))))
 
-    vae_loss = K.mean(reconstruction_loss + kl_loss + rp_l2_loss - s_l2_loss + s_l0_loss)
+    vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss - s_l2_loss + s_l0_loss)
     vae.add_loss(vae_loss)
 
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
-    plot_model(vae, to_file='factored_vae.png', show_shapes=True)
+    # plot_model(vae, to_file='factored_vae.png', show_shapes=True)
 
     if args.weights:
-        vae.load_weights(args.weights)
-        reconstruction_loss *= image_size * image_size
-        kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-        kl_loss = K.sum(kl_loss, axis=-1)
-        kl_loss *= -0.5
-        print(z.shape)
-        sys.exit()
-        rp_l2_loss = z[0:rp_dim]
-        vae_loss = K.mean(reconstruction_loss + kl_loss + rp_l2_loss - s_l2_loss + s_l0_loss)
-        vae.add_loss(vae_loss)
-        vae.save('factored_vae_deepmind_model1_modified.h5')
+        pass
     else:
         # train the autoencoder
+        print("starting to generate all images")
+        all_images = [np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/obs" + str(i) + "_*.png")]) / 255. for i in trange(999)]
+        print("loaded all images")
         if True:
             epoch_losses = []
             for epoch in range(epochs):
                 losses = []
-                for i in range(10):
-                    imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.png")])
-                    imgs_batch = imgs / 255.
+                for i in trange(999):
+                    imgs_batch = all_images[i]
                     loss = vae.train_on_batch(imgs_batch, y=None)
                     losses.append(loss)
                 print("epoch", epoch, "\tmean loss", np.mean(losses))
                 epoch_losses.append(np.mean(losses))
                 if epoch % 50 == 0:
                     print("testing")
-                    vae.save('factored_vae_deepmind_modelnew_arch_factored.h5')
+                    vae.save_weights('jaco_myvae_weights.h5')
                     predicted_imgs = vae.predict(x_test, batch_size=batch_size)
                     x_test_scaled = 255. * x_test
-                    predicted_imgs_scaled = 255. * predicted_imgs
-                    for i in range(len(predicted_imgs)):
-                        cv2.imwrite("images_new_arch3/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
-                        cv2.imwrite("images_new_arch3/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
+                    predicted_imgs_scaled = 255. * predicted_imgs[2]
+                    for i in range(len(predicted_imgs_scaled)):
+                        cv2.imwrite("images_updated/original_" + str(epoch) + "_" + str(i) + ".png", x_test_scaled[i])
+                        cv2.imwrite("images_updated/reconstructed_" + str(epoch) + "_" + str(i) + ".png", predicted_imgs_scaled[i])
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):
-                        imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.png")])
-                        imgs_batch = imgs / 255.
+                        imgs_batch = all_images[i]
                         outputs = encoder.predict_on_batch(imgs_batch)
                         predicted_z = outputs[2]
-                        # s_differences = np.abs(predicted_z[1:, s_dim:] - predicted_z[:-1, s_dim:]) + 1e-5
-                        # s_differences /= np.max([np.max(s_differences), 1e-5])
                         normalized_s = np.abs(predicted_z[:, s_dim:]) / (np.sum(np.abs(predicted_z[:, s_dim:])) + 1e-5)
                         print("\n")
-                        print("rp L2 loss", rp_l2_loss_weight * np.mean((predicted_z[1:, :rp_dim] - predicted_z[:-1, :rp_dim])**2),
-                              "s L2 loss", s_l2_loss_weight * np.mean((predicted_z[1:, s_dim:] - predicted_z[:-1, s_dim:])**2),
-                              "s Entropy loss", s_l0_loss_weight * -1 * np.mean((normalized_s + 1e-5) * np.log((normalized_s + 1e-5))))
-                        print("RP Mean", np.mean(predicted_z[0, :rp_dim]), "S Mean", np.mean(predicted_z[0, s_dim:]))
-                        print("RP Min", np.min(predicted_z[0, :rp_dim]), "S Min", np.min(predicted_z[0, s_dim:]))
-                        print("RP Max", np.max(predicted_z[0, :rp_dim]), "S Max", np.max(predicted_z[0, s_dim:]))
+                        print("rp L2 loss", np.mean(rp_l2_loss_weight * (predicted_z[1:, :rp_dim] - predicted_z[:-1, :rp_dim])**2),
+                              "s L2 loss", np.mean(s_l2_loss_weight * (predicted_z[1:, s_dim:] - predicted_z[:-1, s_dim:])**2),
+                              "s Entropy loss", np.mean(s_l0_loss_weight * -1 * (normalized_s + 1e-5) * np.log((normalized_s + 1e-5))))
+                        print("RP Min", np.min(predicted_z[0, :rp_dim]),"RP Mean", np.mean(predicted_z[0, :rp_dim]), "RP Max", np.max(predicted_z[0, :rp_dim]))
+                        print("S Min", np.min(predicted_z[0, s_dim:]), "S Max", np.max(predicted_z[0, s_dim:]), "S Mean", np.mean(predicted_z[0, s_dim:]))
                         print("\n")
 
-            np.savez_compressed("factored_vae_deepmind_training_losses", epoch_losses=np.asarray(epoch_losses))
+            np.savez_compressed("jaco_vae_history", epoch_losses=np.asarray(epoch_losses))
         else:
             vae.fit(x_train,
                     epochs=epochs,
                     batch_size=batch_size,
                     validation_data=(x_test, None))
-        vae.save('factored_vae_deepmind_modelnew_arch_factored.h5')
+        vae.save_weights('jaco_myvae_weights.h5')
 
 # Test the autoencoder
     # if True:
@@ -324,7 +324,7 @@ if __name__ == '__main__':
     # else:
     #     test_losses = 0.
     #     for i in range(99):
-    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations/obs_" + str(i) + "_*.jpg")])
+    #         imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/obs" + str(i) + "_*.jpg")])
     #         imgs_batch = imgs / 255.
     #         loss = vae.predict_on_batch(imgs_batch)
     #         # print("epoch", epoch, "episode", i, "loss", loss, "batch size", imgs_batch.shape[0])
