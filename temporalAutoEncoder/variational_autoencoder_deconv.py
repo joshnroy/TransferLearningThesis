@@ -22,7 +22,7 @@ from keras.layers import Conv2D, Flatten, Lambda
 from keras.layers import Reshape, Conv2DTranspose
 from keras.models import Model
 from keras.datasets import mnist
-from keras.losses import mse, binary_crossentropy
+from keras.losses import mse, binary_crossentropy, mean_absolute_error
 from keras.optimizers import Adam
 from keras.utils import plot_model
 from keras import backend as K
@@ -53,7 +53,8 @@ def sampling(args):
     dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean=0 and std=1.0
     epsilon = K.random_normal(shape=(batch, dim))
-    return z_mean + K.exp(0.5 * z_log_var) * epsilon
+    # return z_mean + K.exp(0.5 * z_log_var) * epsilon
+    return z_mean
 
 
 def plot_results(models,
@@ -131,8 +132,8 @@ if False:
 else:
     # Cartpole Dataset
     imgs = np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/*.png")])
-    x_train = imgs[:-100]
-    x_test = imgs[-100:]
+    x_train = imgs[150:]
+    x_test = imgs[:150]
     x_train = x_train.astype('float32') / 255
     x_test = x_test.astype('float32') / 255
     y_train = np.array([])
@@ -142,63 +143,73 @@ else:
 
 # network parameters
 batch_size = 128
-latent_dim = 64
-epochs = 100
+latent_dim = 32
+# epochs = 20
+epochs = 670
 
-# VAE model = encoder + decoder
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
-x = inputs
-# for i in range(2):
-#     filters *= 2
-x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(inputs)
+x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
+x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
+x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
+                  padding='same')(x_inputs)
 
-# shape info needed to build decoder
-shape = K.int_shape(x)
+x_inputs = Flatten()(x_inputs)
+x_inputs = Dense(256, activation='relu')(x_inputs)
+z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
+z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
 
-# generate latent vector Q(z|X)
-x = Flatten()(x)
-x = Dense(256, activation='relu')(x)
-z_mean = Dense(latent_dim, name='z_mean')(x)
-z_log_var = Dense(latent_dim, name='z_log_var')(x)
-
-# use reparameterization trick to push the sampling out as input
-# note that "output_shape" isn't necessary with the TensorFlow backend
 z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
+
+
+
+
 
 # instantiate encoder model
 encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
 encoder.summary()
-plot_model(encoder, to_file='vae_cnn_encoder.png', show_shapes=True)
+# plot_model(encoder, to_file='vae_cnn_encoder.png', show_shapes=True)
+
+
+
+
 
 # build decoder model
-latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(256, activation='relu')(latent_inputs)
-x = Dense(shape[1] * shape[2] * shape[3], activation='relu')(x)
-x = Reshape((shape[1], shape[2], shape[3]))(x)
+latent_inputs = Input(shape=(latent_dim,))
+x_decoder = Dense(256, activation='relu')(latent_inputs)
+x_decoder = Dense(4 * 4 * 64, activation='relu')(x_decoder)
+x_decoder = Reshape((4, 4, 64))(x_decoder)
 
-x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
-x = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x)
+x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
+                            strides=2, padding='same')(x_decoder)
 
-outputs = Conv2DTranspose(filters=3,
-                          kernel_size=1,
-                          strides=1,
-                          activation='sigmoid',
-                          padding='same')(x)
-outputs = Lambda(lambda x: x[:, :84, :84, :], name='decoder_output')(outputs)
+x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1,
+                            activation='sigmoid', padding='same')(x_decoder)
+
+
+
+
 
 # instantiate decoder model
-decoder = Model(latent_inputs, outputs, name='decoder')
+decoder = Model(latent_inputs, x_decoder, name='decoder')
+# for layer in decoder.layers:
+#     layer.name += "_decoder"
 decoder.summary()
-plot_model(decoder, to_file='vae_cnn_decoder.png', show_shapes=True)
+# plot_model(decoder, to_file='vae_cnn_decoder.png', show_shapes=True)
 
 # instantiate VAE model
-outputs = decoder(encoder(inputs)[2])
+encoder_outputs = encoder(inputs)
+outputs = [encoder_outputs[0], encoder_outputs[1], decoder(encoder_outputs[2])]
 vae = Model(inputs, outputs, name='vae')
 
 if __name__ == '__main__':
@@ -213,47 +224,63 @@ if __name__ == '__main__':
 
     # VAE loss = mse_loss or xent_loss + kl_loss
     if args.mse:
-        reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs))
+        reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs[2]))
     else:
         reconstruction_loss = binary_crossentropy(K.flatten(inputs),
-                                                  K.flatten(outputs))
+                                                  K.flatten(outputs[2]))
 
     reconstruction_loss *= image_size * image_size
-    beta = 1.
-    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
+    beta = 175.
+    kl_loss = 1 + outputs[0] - K.square(outputs[1]) - K.exp(outputs[0])
     kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5 * beta
-    vae_loss = K.mean(reconstruction_loss + kl_loss)
+    kl_loss *= -0.5
+    vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
     vae.add_loss(vae_loss)
-    learning_rate = 1e-3
+    learning_rate = 1e-4
+    # decay = learning_rate / float(epochs)
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
-    plot_model(vae, to_file='vae_cnn.png', show_shapes=True)
+    # plot_model(vae, to_file='vae_cnn.png', show_shapes=True)
 
     if args.weights:
-        vae.load_weights(args.weights)
-        reconstruction_loss *= image_size * image_size
-        kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-        kl_loss = K.sum(kl_loss, axis=-1)
-        kl_loss *= -0.5
-        vae_loss = K.mean(reconstruction_loss + kl_loss)
-        vae.add_loss(vae_loss)
-        vae.save_weights('vae_cnn_cartpole_model.h5')
+        pass
+        # vae.load_weights(args.weights)
+        # reconstruction_loss *= image_size * image_size
+        # kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
+        # kl_loss = K.sum(kl_loss, axis=-1)
+        # kl_loss *= -0.5
+        # # vae_loss = K.mean(reconstruction_loss + kl_loss)
+        # vae_loss = K.mean(reconstruction_loss)
+        # vae.add_loss(vae_loss)
+        # vae.save_weights('vae_cnn_cartpole_model.h5')
     else:
-        # train the autoencoder
-        vae.fit(x_train,
-                epochs=epochs,
-                batch_size=batch_size,
+        vae.fit(x_train, epochs=epochs, batch_size=batch_size,
                 validation_data=(x_test, None))
         vae.save_weights('darla_beta_vae.h5')
 
 # Test the autoencoder
-    predicted_imgs = vae.predict(x_test, batch_size=batch_size)
+    predicted_outputs = vae.predict(x_test, batch_size=batch_size)
+    predicted_imgs = predicted_outputs[2]
+    print("test")
+    print(x_test.max(), x_test.min(), x_test.mean())
+    print(predicted_imgs.max(), predicted_imgs.min(), predicted_imgs.mean())
+    predicted_imgs += np.mean(x_test, axis=0)
     x_test *= 255.
     predicted_imgs *= 255.
     for i in range(len(predicted_imgs)):
-        cv2.imwrite("images/original" + str(i) + ".png", x_test[i])
-        cv2.imwrite("images/reconstructed" + str(i) + ".png", predicted_imgs[i])
+        cv2.imwrite("test_images/original" + str(i) + ".png", x_test[i])
+        cv2.imwrite("test_images/reconstructed" + str(i) + ".png", predicted_imgs[i])
+    predicted_outputs = vae.predict(x_train, batch_size=batch_size)
+    predicted_imgs = predicted_outputs[2]
+    print("train")
+    print(x_train.max(), x_train.min(), x_train.mean())
+    print(predicted_imgs.max(), predicted_imgs.min(), predicted_imgs.mean())
+    predicted_imgs += np.mean(x_train, axis=0)
+    x_train *= 255.
+    predicted_imgs *= 255.
+    for i in range(len(predicted_imgs)):
+        cv2.imwrite("train_images/original" + str(i) + ".png", x_train[i])
+        cv2.imwrite("train_images/reconstructed" + str(i) + ".png", predicted_imgs[i])
 
     # plot_results(models, data, batch_size=batch_size, model_name="vae_cnn")
