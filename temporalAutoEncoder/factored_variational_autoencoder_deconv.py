@@ -149,12 +149,12 @@ rp_dim = 32
 s_dim = latent_dim - rp_dim
 num_conv = 3
 
-rp_l2_loss_weight = 0.
+rp_l2_loss_weight = 1.
 s_l2_loss_weight = 0.
 s_l0_loss_weight = 0.
 
 batch_size = 128
-epochs = 670
+epochs = 2000
 
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
@@ -203,7 +203,7 @@ x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
                             strides=2, padding='same')(x_decoder)
 
 x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1,
-                            activation='sigmoid', padding='same')(x_decoder)
+                            activation='linear', padding='same')(x_decoder)
 
 
 
@@ -240,36 +240,40 @@ if __name__ == '__main__':
 
     reconstruction_loss *= image_size * image_size
 
-    beta = 175.
-    kl_loss = 1 + outputs[1] - K.square(outputs[0]) - K.exp(outputs[1])
+    beta = 1.
+    kl_loss = 1 + outputs[0] - K.square(outputs[1]) - K.exp(outputs[0])
     kl_loss = K.sum(kl_loss, axis=-1)
     kl_loss *= -0.5
 
 
     z = outputs[2]
     rp_l2_loss = rp_l2_loss_weight * K.mean(K.square(z[1:, :rp_dim] - z[:-1, :rp_dim]))
-    s_l2_loss = s_l2_loss_weight * K.mean(K.square(z[1:, s_dim:] - z[:-1, s_dim:]))
+    s_l2_loss = -1 * s_l2_loss_weight * K.mean(K.square(z[1:, s_dim:] - z[:-1, s_dim:]))
     s_difference = K.abs(z[1:, s_dim:] - z[:-1, s_dim:]) + 1e-5
     s_difference /= K.max([K.max(s_difference), 1e-5])
     # normalized_s = K.abs(z[:, s_dim:]) / (K.sum(K.abs(z[:, s_dim:])) + 1e-5)
     normalized_s = s_difference
-    s_l0_loss = s_l0_loss_weight * -1 * K.mean((normalized_s + 1e-5) * (K.log((normalized_s + 1e-5))))
+    s_l0_loss = s_l0_loss_weight * -1 * K.mean((normalized_s + 1e-5) *
+                                               (K.log((normalized_s + 1e-5))))
 
-    vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
+    vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss +
+                      s_l2_loss + s_l0_loss)
     vae.add_loss(vae_loss)
 
     learning_rate = 1e-4
     adam = Adam(lr=learning_rate)
     vae.compile(optimizer=adam)
     vae.summary()
-    # plot_model(vae, to_file='factored_vae.png', show_shapes=True)
 
     if args.weights:
         pass
     else:
         # train the autoencoder
         print("starting to generate all images")
-        all_images = [np.asarray([cv2.imread(x) for x in glob.glob("training_observations_jaco/obs" + str(i) + "_*.png")]) / 255. for i in trange(999)]
+        all_images = [np.asarray([cv2.imread(x) for x in
+                                  glob.glob("training_observations_jaco/obs" +
+                                            str(i) + "_*.png")]) / 255. for i
+                      in trange(999)]
         print("loaded all images")
         if True:
             epoch_losses = []
@@ -277,6 +281,7 @@ if __name__ == '__main__':
                 losses = []
                 for i in trange(999):
                     imgs_batch = all_images[i]
+                    np.random.shuffle(imgs_batch)
                     loss = vae.train_on_batch(imgs_batch, y=None)
                     losses.append(loss)
                 print("epoch", epoch, "\tmean loss", np.mean(losses))
@@ -293,6 +298,7 @@ if __name__ == '__main__':
                     encoder = Model(vae.inputs, vae.layers[-2].outputs)
                     encoder.compile(optimizer=adam, loss='mse')
                     for i in range(2):
+                        # np.random.shuffle(all_images[i])
                         imgs_batch = all_images[i]
                         outputs = encoder.predict_on_batch(imgs_batch)
                         predicted_z = outputs[2]

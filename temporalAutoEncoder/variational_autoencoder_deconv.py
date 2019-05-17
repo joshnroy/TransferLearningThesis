@@ -138,14 +138,14 @@ else:
     x_test = x_test.astype('float32') / 255
     y_train = np.array([])
     y_test = np.array([])
-    image_size = x_train.shape[1]
+    image_size = 64
     input_shape = (image_size, image_size, 3)
 
 # network parameters
 batch_size = 128
-latent_dim = 32
+latent_dim = 64
 # epochs = 20
-epochs = 670
+epochs = 20
 
 # build encoder model
 inputs = Input(shape=input_shape, name='encoder_input')
@@ -244,20 +244,12 @@ if __name__ == '__main__':
     # plot_model(vae, to_file='vae_cnn.png', show_shapes=True)
 
     if args.weights:
-        pass
-        # vae.load_weights(args.weights)
-        # reconstruction_loss *= image_size * image_size
-        # kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-        # kl_loss = K.sum(kl_loss, axis=-1)
-        # kl_loss *= -0.5
-        # # vae_loss = K.mean(reconstruction_loss + kl_loss)
-        # vae_loss = K.mean(reconstruction_loss)
-        # vae.add_loss(vae_loss)
-        # vae.save_weights('vae_cnn_cartpole_model.h5')
+        vae.load_weights(args.weights)
+        print("loaded weights")
     else:
         vae.fit(x_train, epochs=epochs, batch_size=batch_size,
                 validation_data=(x_test, None))
-        vae.save_weights('darla_beta_vae.h5')
+        vae.save_weights('darla_beta_vae_again.h5')
 
 # Test the autoencoder
     predicted_outputs = vae.predict(x_test, batch_size=batch_size)
@@ -265,7 +257,6 @@ if __name__ == '__main__':
     print("test")
     print(x_test.max(), x_test.min(), x_test.mean())
     print(predicted_imgs.max(), predicted_imgs.min(), predicted_imgs.mean())
-    predicted_imgs += np.mean(x_test, axis=0)
     x_test *= 255.
     predicted_imgs *= 255.
     for i in range(len(predicted_imgs)):
@@ -276,7 +267,6 @@ if __name__ == '__main__':
     print("train")
     print(x_train.max(), x_train.min(), x_train.mean())
     print(predicted_imgs.max(), predicted_imgs.min(), predicted_imgs.mean())
-    predicted_imgs += np.mean(x_train, axis=0)
     x_train *= 255.
     predicted_imgs *= 255.
     for i in range(len(predicted_imgs)):
