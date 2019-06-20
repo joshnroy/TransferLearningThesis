@@ -144,7 +144,6 @@ else:
 # network parameters
 batch_size = 128
 latent_dim = 64
-# epochs = 20
 epochs = 20
 
 # build encoder model

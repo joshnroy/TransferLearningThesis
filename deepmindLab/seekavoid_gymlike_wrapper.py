@@ -22,7 +22,7 @@ class SeekAvoidEnv():
         self.i = 0
 
         level_script = "contributed/dmlab30/rooms_collect_good_objects_train"
-        self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
+        self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='software')
         # self.window = cv2.namedWindow("Game Window", cv2.WINDOW_NORMAL)
 
         self.action_space = np.zeros(3)
@@ -32,7 +32,6 @@ class SeekAvoidEnv():
         return [seed]
 
     def step(self, action):
-        # action = action.astype(np.intc)
         action = self.convert_action(action)
         reward = self.env.step(action, num_steps=10)
         done = not self.env.is_running()
