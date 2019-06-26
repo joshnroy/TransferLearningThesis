@@ -7,7 +7,7 @@ from __future__ import print_function
 
 from keras.layers import Dense, Input
 from keras.layers import Conv2D, Flatten, Lambda
-from keras.layers import Reshape, Conv2DTranspose
+from keras.layers import Reshape, Conv2DTranspose, Concatenate
 from keras.models import Model
 from keras.datasets import mnist
 from keras.losses import mse, binary_crossentropy, mean_absolute_error, mae
@@ -80,9 +80,23 @@ def sampling(args):
 
     z_mean, z_log_var = args
     batch = K.shape(z_mean)[0]
-    dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean=0 and std=1.0
-    epsilon = K.random_normal(shape=(batch, dim))
+    epsilon = K.random_normal(shape=(batch, 84, 84, 3))
+    return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+def sampling_np(args):
+    """Reparameterization trick by sampling fr an isotropic unit Gaussian.
+    # Arguments
+        args (tensor): mean and log of variance of Q(z|X)
+
+    # Returns
+        z (tensor): sampled latent vector
+    """
+
+    z_mean, z_log_var = args
+    batch = np.shape(z_mean)[0]
+    # by default, random_normal has mean=0 and std=1.0
+    epsilon = np.random_normal(shape=(batch, 84, 84, 3))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 
@@ -102,15 +116,15 @@ x_inputs = Dense(256, activation='relu')(x_inputs)
 z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
 z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
 
-z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
-
 # instantiate encoder model
-encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
+encoder = Model(inputs, [z_mean, z_log_var], name='encoder')
 encoder.summary()
 
 
 # build decoder model
-latent_inputs = Input(shape=(latent_dim,))
+input_z_mean = Input(shape=(latent_dim,))
+input_z_log_var = Input(shape=(latent_dim,))
+latent_inputs = Concatenate()([input_z_mean, input_z_log_var])
 x_decoder = Dense(256, activation='relu')(latent_inputs)
 x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
 x_decoder = Reshape((6, 6, 64))(x_decoder)
@@ -120,16 +134,16 @@ x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', stride
 x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 
-x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
+x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
 x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
 
 # instantiate decoder model
-decoder = Model(latent_inputs, x_decoder, name='decoder')
+decoder = Model([input_z_mean, input_z_log_var], x_decoder, name='decoder')
 decoder.summary()
 
 # instantiate VAE model
 encoder_outputs = encoder(inputs)
-outputs = [encoder_outputs[0], encoder_outputs[1], decoder(encoder_outputs[2])]
+outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
 vae = Model(inputs, outputs, name='vae')
 for layer in vae.layers:
     layer.name += "_vae"
@@ -138,7 +152,6 @@ for layer in vae.layers:
 denoising_encoder = Model(denoising.inputs, denoising.layers[-2].outputs)
 for layer in denoising_encoder.layers:
     layer.trainable = False
-denoising_encoder.summary()
 
 
 def load_small_dataset():
@@ -156,16 +169,17 @@ def load_small_dataset():
     return x_train, y_train, x_test, y_test, image_size, input_shape
 
 x_train, y_train, x_test, y_test, image_size, input_shape = load_small_dataset()
-print(x_train.max())
 
 
-# reconstruction_loss = mse(denoising_encoder(inputs), denoising_encoder(outputs[2]))
-# reconstruction_loss *= 100
-reconstruction_loss = K.square(denoising_encoder(inputs) - denoising_encoder(outputs[2]))
-reconstruction_loss = K.sum(reconstruction_loss, axis=-1)
-beta = 175.
-kl_loss = 1 + outputs[0] - K.square(outputs[1]) - K.exp(outputs[0])
-kl_loss = K.sum(kl_loss, axis=-1)
+output = vae.outputs[0]
+mean_output = output[:, :, :, :3]
+log_var_output = output[:, :, :, 3:]
+sampled_reconstruction = sampling([mean_output, log_var_output])
+reconstruction_loss = K.square(denoising_encoder(inputs) - denoising_encoder(sampled_reconstruction))
+reconstruction_loss = K.mean(reconstruction_loss, axis=-1)
+beta = 1.
+kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
+kl_loss = K.sum(kl_loss, axis=[-1, -2, -3])
 kl_loss *= -0.5
 vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
 vae.add_loss(vae_loss)
@@ -216,7 +230,7 @@ else:
     vae.load_weights('darla_vae.h5')
 
 
-predicted_imgs = vae.predict(x_train, batch_size=batch_size)[2]
+predicted_imgs = vae.predict(x_train, batch_size=batch_size)[:, :, :, :3]
 print(x_train.max(), x_train.mean(), x_train.min())
 cv2.imwrite("original.png", x_train[35] * 255.)
 
@@ -226,6 +240,7 @@ if False:
     print(predicted_imgs.max(), predicted_imgs.mean(), predicted_imgs.min())
     cv2.imwrite("predicted.png", predicted_imgs[118])
 else:
+    print(predicted_imgs.shape)
     denoised_predicted = denoising.predict(predicted_imgs)
     print(denoised_predicted.max(), denoised_predicted.mean(), denoised_predicted.min())
     denoised_predicted = np.clip(denoised_predicted, 0., 1.)
