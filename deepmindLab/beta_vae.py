@@ -179,7 +179,7 @@ reconstruction_loss = K.square(denoising_encoder(inputs) - denoising_encoder(sam
 reconstruction_loss = K.mean(reconstruction_loss, axis=-1)
 beta = 1.
 kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
-kl_loss = K.sum(kl_loss, axis=[-1, -2, -3])
+kl_loss = K.mean(kl_loss, axis=[-1, -2, -3])
 kl_loss *= -0.5
 vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
 vae.add_loss(vae_loss)
@@ -209,13 +209,14 @@ class DataSequence(Sequence):
 
 
 
-epochs = 1
+epochs = 20
 batch_size = 100
 steps_per_epoch = int(np.round(len(glob.glob("training_observations2/*.png")) / batch_size))
 checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='val_loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
 if True:
     img_generator = DataSequence(batch_size=batch_size)
+    vae.load_weights('darla_vae.h5.10epochs')
     history = vae.fit_generator(img_generator, epochs=epochs, workers=7, callbacks=[checkpoint], validation_data=(x_test, None))
 
 
