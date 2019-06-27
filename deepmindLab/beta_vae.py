@@ -209,21 +209,21 @@ class DataSequence(Sequence):
 
 
 
-epochs = 20
+epochs = 1
 batch_size = 100
 steps_per_epoch = int(np.round(len(glob.glob("training_observations2/*.png")) / batch_size))
 checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='val_loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
 if True:
     img_generator = DataSequence(batch_size=batch_size)
-    vae.load_weights('darla_vae.h5.10epochs')
+    vae.load_weights('darla_vae.h5')
     history = vae.fit_generator(img_generator, epochs=epochs, workers=7, callbacks=[checkpoint], validation_data=(x_test, None))
 
 
-    plt.plot(history.history['loss'], label='train')
-    plt.plot(history.history['val_loss'], label='test')
-    plt.legend(['train', 'test'])
-    plt.show()
+    # plt.plot(history.history['loss'], label='train')
+    # plt.plot(history.history['val_loss'], label='test')
+    # plt.legend(['train', 'test'])
+    # plt.show()
 
 
     vae.save_weights('darla_vae.h5')

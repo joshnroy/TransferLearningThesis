@@ -158,7 +158,6 @@ for layer in denoising_encoder.layers:
 
 def load_small_dataset():
     imgs = np.asarray([cv2.imread(x) for x in tqdm(glob.glob("training_observations2/*.png")[:300])])
-    print(imgs.shape)
     x_train = imgs[:128, :]
     x_test = imgs[128:, :]
     x_train = x_train.astype('float32') / 255.
@@ -190,11 +189,11 @@ rp_l2_loss = rp_l2_loss_weight * (K.mean(K.square(mean_latent[1:, :rp_dim] -
                                   K.mean(K.square(log_var_latent[1:, :rp_dim] -
                                                   log_var_latent[:-1, :rp_dim])))
 
-s_l2_loss_weight = 1.
-s_l2_loss = -1. * s_l2_loss_weight * (K.mean(K.square(mean_latent[1:, rp_dim:] -
-                                                      mean_latent[:-1, rp_dim:])) +
-                                      K.mean(K.square(log_var_latent[1:, rp_dim:] -
-                                                      log_var_latent[:-1, rp_dim:])))
+# s_l2_loss_weight = 1.
+# s_l2_loss = -1. * s_l2_loss_weight * (K.mean(K.square(mean_latent[1:, rp_dim:] -
+#                                                       mean_latent[:-1, rp_dim:])) +
+#                                       K.mean(K.square(log_var_latent[1:, rp_dim:] -
+#                                                       log_var_latent[:-1, rp_dim:])))
 
 
 def entropy(x):
@@ -205,16 +204,13 @@ def entropy(x):
 s_entropy_loss_term = 1.
 s_entropy_loss = s_entropy_loss_term * (entropy(mean_latent) + entropy(log_var_latent))
 
-print(rp_l2_loss, s_l2_loss, s_entropy_loss)
-sys.exit()
-
-
 
 beta = 1.
 kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
 kl_loss = K.mean(kl_loss, axis=[-1, -2, -3])
 kl_loss *= -0.5
-vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss + s_l2_loss + s_entropy_loss)
+# vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss + s_l2_loss + s_entropy_loss)
+vae_loss = K.mean(reconstruction_loss + beta * kl_loss + rp_l2_loss + s_entropy_loss)
 vae.add_loss(vae_loss)
 learning_rate = 1e-4
 adam = Adam(lr=learning_rate)
@@ -223,34 +219,40 @@ vae.summary()
 
 
 class DataSequence(Sequence):
-    def __init__(self, batch_size=128):
-        self.batch_size = batch_size
-        self.filenames = glob.glob("training_observations2/*.png")
+    def __init__(self):
+        self.num_episodes = 5000
+        self.num_frames = 360
+        self.filenames = [["training_observations2/obs_" + str(i) +  "_" + str(j) + ".png" for j in range(self.num_frames)] for i in range(self.num_episodes)]
         self.image_size = 84
-        self.on_epoch_end()
+        self.curr_episode = 0
+        # self.on_epoch_end()
 
     def on_epoch_end(self):
-        np.random.shuffle(self.filenames)
+        pass
 
     def __len__(self):
-        return int(np.floor(len(self.filenames) / self.batch_size))
+        return self.num_episodes
 
     def __getitem__(self, idx):
-        batch_x = np.asarray([cv2.imread(x) for x in self.filenames[idx * self.batch_size:(idx + 1) * self.batch_size]])
+        batch_x = np.asarray([cv2.imread(x) for x in self.filenames[self.curr_episode]])
+        batch_x = []
+        for f in self.filenames[self.curr_episode]:
+            x = cv2.imread(f)
+            if x is not None:
+                batch_x.append(x)
+        batch_x = np.asarray(batch_x)
         batch_x = batch_x.astype('float32') / 255.
+        self.curr_episode = (self.curr_episode + 1) % self.num_episodes
         return batch_x, None
 
 
 
-epochs = 20
-batch_size = 100
-steps_per_epoch = int(np.round(len(glob.glob("training_observations2/*.png")) / batch_size))
-checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='val_loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
+epochs = 30
+checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
 if True:
-    img_generator = DataSequence(batch_size=batch_size)
-    vae.load_weights('darla_vae.h5.10epochs')
-    history = vae.fit_generator(img_generator, epochs=epochs, workers=7, callbacks=[checkpoint], validation_data=(x_test, None))
+    img_generator = DataSequence()
+    history = vae.fit_generator(img_generator, epochs=epochs)
 
 
     plt.plot(history.history['loss'], label='train')
@@ -259,23 +261,19 @@ if True:
     plt.show()
 
 
-    vae.save_weights('darla_vae.h5')
+    vae.save_weights('temporal_vae.h5')
 else:
-    vae.load_weights('darla_vae.h5')
+    vae.load_weights('temporal_vae.h5')
 
 
 predicted_imgs = vae.predict(x_train, batch_size=batch_size)[:, :, :, :3]
-print(x_train.max(), x_train.mean(), x_train.min())
 cv2.imwrite("original.png", x_train[35] * 255.)
 
 if False:
-    print(predicted_imgs.max(), predicted_imgs.mean(), predicted_imgs.min())
     predicted_imgs = (predicted_imgs - predicted_imgs.min()) / (predicted_imgs.max() - predicted_imgs.min())
-    print(predicted_imgs.max(), predicted_imgs.mean(), predicted_imgs.min())
     cv2.imwrite("predicted.png", predicted_imgs[118])
 else:
-    print(predicted_imgs.shape)
     denoised_predicted = denoising.predict(predicted_imgs)
-    print(denoised_predicted.max(), denoised_predicted.mean(), denoised_predicted.min())
-    denoised_predicted = np.clip(denoised_predicted, 0., 1.)
-    cv2.imwrite("denoised.png", denoised_predicted[35] * 255.)
+    print(denoised_predicted[1], denoised_predicted[2])
+    denoised_imgs = np.clip(denoised_predicted[0], 0., 1.)
+    cv2.imwrite("denoised.png", denoised_imgs[35] * 255.)
