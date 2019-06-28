@@ -209,7 +209,7 @@ class Brain:
                                                                          r_t:
                                                                          r})
                 self.frame_count += len(s)
-                if self.frame_count % (len(s) * 3) == 0:
+                if self.frame_count % (len(s) * 10) == 0:
                     self.model.save_weights("baseline_a3c.h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
                     self.csvfile.flush()
