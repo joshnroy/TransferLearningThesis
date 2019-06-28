@@ -130,8 +130,10 @@ class Brain:
                     layer.trainable = False
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
-                l_hidden = encoder(l_input)
-                l_hidden = Concatenate()(l_hidden)
+                l_extracted = encoder(l_input)
+                mean = Lambda(lambda x: x[:, 16:])(l_extracted[0])
+                log_var = Lambda(lambda x: x[:, 16:])(l_extracted[1])
+                l_hidden = Concatenate()([mean, log_var])
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_hidden)
