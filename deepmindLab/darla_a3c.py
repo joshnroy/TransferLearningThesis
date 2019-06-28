@@ -77,63 +77,62 @@ class Brain:
         def _build_model(self):
 
                 # network parameters
-                latent_dim = 100
+                latent_dim = 32
                 input_shape = (84, 84, 3)
 
-                # build encoder model
+# build encoder model
                 inputs = Input(shape=input_shape, name='encoder_input')
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
-                                  padding='same')(inputs)
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2,
-                                  padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
-                                  padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2,
-                                  padding='same')(x_inputs)
+                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(inputs)
+                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
+                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
+                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
 
                 x_inputs = Flatten()(x_inputs)
                 x_inputs = Dense(256, activation='relu')(x_inputs)
                 z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
                 z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
 
-                z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
+# instantiate encoder model
+                encoder = Model(inputs, [z_mean, z_log_var], name='encoder')
+                encoder.summary()
 
-                # instantiate encoder model
-                encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
 
-
-                # build decoder model
-                latent_inputs = Input(shape=(latent_dim,))
+# build decoder model
+                input_z_mean = Input(shape=(latent_dim,))
+                input_z_log_var = Input(shape=(latent_dim,))
+                latent_inputs = Concatenate()([input_z_mean, input_z_log_var])
                 x_decoder = Dense(256, activation='relu')(latent_inputs)
                 x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
                 x_decoder = Reshape((6, 6, 64))(x_decoder)
 
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
-                                            strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu',
-                                            strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
-                                            strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu',
-                                            strides=2, padding='same')(x_decoder)
+                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
+                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
+                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
+                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 
-                x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1,
-                                            activation='linear', padding='same')(x_decoder)
+                x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
                 x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
 
-                # instantiate decoder model
-                decoder = Model(latent_inputs, x_decoder, name='decoder')
+# instantiate decoder model
+                decoder = Model([input_z_mean, input_z_log_var], x_decoder, name='decoder')
+                decoder.summary()
 
-                # instantiate VAE model
+# instantiate VAE model
                 encoder_outputs = encoder(inputs)
-                outputs = [encoder_outputs[0], encoder_outputs[1], decoder(encoder_outputs[2])]
+                outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
                 vae = Model(inputs, outputs, name='vae')
-                vae.load_weights('darla_vae.h5')
+                for layer in vae.layers:
+                    layer.name += "_vae"
+                    layer.trainable = False
+                vae.load_weights("darla_vae.h5")
 
-                encoder = Model(inputs, vae.layers[-2].outputs[2])
+                encoder = Model(inputs, vae.layers[-2].outputs)
+                for layer in encoder.layers:
+                    layer.trainable = False
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_hidden = encoder(l_input)
+                l_hidden = Concatenate()(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_hidden)
@@ -142,7 +141,6 @@ class Brain:
 
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value])
                 model.summary()
-                sys.exit()
                 model._make_predict_function()  # have to initialize before threading
 
                 return model
@@ -351,7 +349,7 @@ class Environment(threading.Thread):
                         if done or self.stop_signal:
                                 break
 
-                print("Total R:", R)
+                print(R)
 
         def run(self):
                 while not self.stop_signal:
