@@ -250,15 +250,15 @@ class DataSequence(Sequence):
 epochs = 30
 checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
-if True:
+if False:
     img_generator = DataSequence()
     history = vae.fit_generator(img_generator, epochs=epochs)
 
 
-    plt.plot(history.history['loss'], label='train')
-    plt.plot(history.history['val_loss'], label='test')
-    plt.legend(['train', 'test'])
-    plt.show()
+    # plt.plot(history.history['loss'], label='train')
+    # plt.plot(history.history['val_loss'], label='test')
+    # plt.legend(['train', 'test'])
+    # plt.show()
 
 
     vae.save_weights('temporal_vae.h5')
@@ -266,7 +266,7 @@ else:
     vae.load_weights('temporal_vae.h5')
 
 
-predicted_imgs = vae.predict(x_train, batch_size=batch_size)[:, :, :, :3]
+predicted_imgs = vae.predict(x_train)[0][:, :, :, :3]
 cv2.imwrite("original.png", x_train[35] * 255.)
 
 if False:
@@ -274,6 +274,5 @@ if False:
     cv2.imwrite("predicted.png", predicted_imgs[118])
 else:
     denoised_predicted = denoising.predict(predicted_imgs)
-    print(denoised_predicted[1], denoised_predicted[2])
-    denoised_imgs = np.clip(denoised_predicted[0], 0., 1.)
-    cv2.imwrite("denoised.png", denoised_imgs[35] * 255.)
+    denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
+    cv2.imwrite("denoised_temporal.png", denoised_imgs * 255.)
