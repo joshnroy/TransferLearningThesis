@@ -63,21 +63,23 @@ class SeekAvoidEnv():
         action_list = np.zeros(7, np.intc)
 
         if action_int == 0:
-            action_list[0] = 25
+            action_list[0] = 50
         elif action_int == 1:
-            action_list[0] = -25
+            action_list[0] = -50
         elif action_int == 2:
+            action_list[0] = 50
             action_list[3] = 1
         elif action_int == 3:
-            action_list[0] = 100
+            action_list[0] = -50
+            action_list[3] = 1
         elif action_int == 4:
-            action_list[0] = -100
+            action_list[0] = -1
         elif action_int == 5:
-            action_list[0] = 400
+            action_list[0] = 1
         elif action_int == 6:
-            action_list[0] = -400
-        elif action_int == 7:
-            action_list[3] = -1
+            action_list[1] = -1
+        elif action_int == 8:
+            action_list[1] = 1
 
         return action_list
 

@@ -402,7 +402,7 @@ if __name__ == "__main__":
     for e in envs:
             e.start()
 
-    num_frames = 1. * 1e7
+    num_frames = 1.6 * 1e7
     tq = tqdm(total=num_frames)
     last_frame = 0
     while brain.frame_count < num_frames:
