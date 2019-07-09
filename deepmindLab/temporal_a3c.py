@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
-
-
 import numpy as np
 import tensorflow as tf
 
@@ -25,8 +22,9 @@ import deepmind_lab
 
 
 #-- constants
-# RUN_TIME = 30
-# RUN_TIME = 86000
+NUM_ACTIONS = 3
+ENV_SHAPE = (84, 84, 3)
+
 THREADS = 4
 OPTIMIZERS = 4
 THREAD_DELAY = 0.001
@@ -41,7 +39,7 @@ EPS_STOP  = .15
 EPS_STEPS = int(1e6)
 
 MIN_BATCH = 32
-LEARNING_RATE = 5e-4
+LEARNING_RATE = 5e-5
 
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
@@ -54,26 +52,29 @@ class Brain:
         train_queue = [ [], [], [], [], [] ]    # s, a, r, s', s' terminal mask
         lock_queue = threading.Lock()
 
-        def __init__(self):
+        def __init__(self, test=False):
                 self.session = tf.Session()
                 K.set_session(self.session)
                 K.manual_variable_initialization(True)
 
-                self.model = self._build_model()
+                self.model = self._build_model(test=test)
                 self.graph = self._build_graph(self.model)
 
                 self.session.run(tf.global_variables_initializer())
                 self.default_graph = tf.get_default_graph()
+                if test:
+                    with self.default_graph.as_default():
+                        self.model.load_weights("temporal_a3c.h5")
 
                 self.default_graph.finalize()   # avoid modifications
 
                 self.frame_count = 0
 
-                self.csvfile = open("baseline_a3c_history.csv", 'w')
+                self.csvfile = open("temporal_a3c.csv", 'w')
                 self.csvwriter = csv.writer(self.csvfile, delimiter=',', quotechar='"')
                 self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Reward', 'Frame Count'])
 
-        def _build_model(self):
+        def _build_model(self, test):
 
                 # network parameters
                 latent_dim = 32
@@ -141,6 +142,10 @@ class Brain:
 
 
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value])
+                if test:
+                    model.load_weights("temporal_a3c.h5")
+                    for layer in model.layers:
+                        layer.trainable = False
                 model.summary()
                 model._make_predict_function()  # have to initialize before threading
 
@@ -211,7 +216,8 @@ class Brain:
                                                                          r})
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
-                    self.model.save_weights("baseline_a3c.h5", overwrite=True)
+                    with self.default_graph.as_default():
+                        self.model.save_weights("temporal_a3c.h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 
@@ -380,34 +386,37 @@ class Optimizer(threading.Thread):
 # In[ ]:
 
 
-env_test = Environment(render=False, eps_start=0., eps_end=0.)
-NUM_ACTIONS = 3
-ENV_SHAPE = (84, 84, 3)
+if __name__ == "__main__":
+    env_test = Environment(render=False, eps_start=0., eps_end=0.)
+    NUM_ACTIONS = 3
+    ENV_SHAPE = (84, 84, 3)
 # ENV_SHAPE=(4,)
-NONE_STATE = np.zeros(ENV_SHAPE)
+    NONE_STATE = np.zeros(ENV_SHAPE)
 
-brain = Brain() # brain is global in A3C
+    brain = Brain() # brain is global in A3C
 
-envs = [Environment() for i in range(THREADS)]
-opts = [Optimizer() for i in range(OPTIMIZERS)]
+    envs = [Environment() for i in range(THREADS)]
+    opts = [Optimizer() for i in range(OPTIMIZERS)]
 
-for o in opts:
-        o.start()
+    for o in opts:
+            o.start()
 
-for e in envs:
-        e.start()
+    for e in envs:
+            e.start()
 
-while brain.frame_count < 1.6 * 1e7:
-    sys.stderr.write(str(brain.frame_count) + "\n")
-    time.sleep(60)
+    while brain.frame_count < 3. * 1e6:
+        sys.stderr.write(str(brain.frame_count) + "\n")
+        time.sleep(60)
 
-for e in envs:
-        e.stop()
-for e in envs:
-        e.join()
+    for e in envs:
+            e.stop()
+    for e in envs:
+            e.join()
 
-for o in opts:
-        o.stop()
-for o in opts:
-        o.join()
+    for o in opts:
+            o.stop()
+    for o in opts:
+            o.join()
 
+
+    brain.model.save_weights("temporal_a3c_done.h5")

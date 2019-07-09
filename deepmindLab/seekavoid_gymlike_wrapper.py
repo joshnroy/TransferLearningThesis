@@ -7,23 +7,21 @@ import sys
 import numpy as np
 import six
 import cv2
-import huffman
 from copy import deepcopy
 from tqdm import trange, tqdm
 
 import deepmind_lab
 
 class SeekAvoidEnv():
-    def __init__(self):
-        config = {"width": "84", "height": "84", "fps": "60"}
+    def __init__(self, test=False):
+        config = {"width": "84", "height": "84", "fps": "60", "allowHoldOutLevels": "true"}
         self.look_degree_step = 100
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
         self.i = 0
 
-        level_script = "contributed/dmlab30/rooms_collect_good_objects_train"
+        level_script = "contributed/dmlab30/rooms_collect_good_objects_train" if not test else "contributed/dmlab30/rooms_collect_good_objects_test"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='software')
-        # self.window = cv2.namedWindow("Game Window", cv2.WINDOW_NORMAL)
 
         self.action_space = np.zeros(3)
 
@@ -70,6 +68,16 @@ class SeekAvoidEnv():
             action_list[0] = -25
         elif action_int == 2:
             action_list[3] = 1
+        elif action_int == 3:
+            action_list[0] = 100
+        elif action_int == 4:
+            action_list[0] = -100
+        elif action_int == 5:
+            action_list[0] = 400
+        elif action_int == 6:
+            action_list[0] = -400
+        elif action_int == 7:
+            action_list[3] = -1
 
         return action_list
 
