@@ -19,6 +19,7 @@ class SeekAvoidEnv():
         self.observation_space = np.zeros((int(config['width']), int(config['height']), 3))
 
         self.i = 0
+        self.step_increment = 10
 
         level_script = "contributed/dmlab30/rooms_collect_good_objects_train" if not test else "contributed/dmlab30/rooms_collect_good_objects_test"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='software')
@@ -29,18 +30,25 @@ class SeekAvoidEnv():
     def seed(self, seed=None):
         return [seed]
 
+    def num_steps(self):
+        return self.i * self.step_increment
+
     def step(self, action):
         action = self.convert_action(action)
-        reward = self.env.step(action, num_steps=10)
-        done = not self.env.is_running()
+        reward = self.env.step(action, num_steps=self.step_increment)
+        env_done = not self.env.is_running()
         self.i += 1
-        if not done:
+        if not env_done:
             observations = np.asarray(self.env.observations()['RGB_INTERLEAVED']) / 255.
         else:
-            observations = self.observation_space
+            self.env.reset()
+            observations = np.asarray(self.env.observations()['RGB_INTERLEAVED']) / 255.
+
+        done = self.num_steps() >= 3600
         return observations, reward, done, {}
 
     def reset(self):
+        self.i = 0
         self.env.reset()
         observations = np.asarray(self.env.observations()['RGB_INTERLEAVED']) / 255.
         return observations
@@ -48,8 +56,6 @@ class SeekAvoidEnv():
     def render(self, mode):
         if self.env.is_running():
             image = self.env.observations()['RGB_INTERLEAVED']
-            if (self.i > 500000):
-                cv2.imwrite("images/img" + str(self.i) + ".png", image)
         else:
             image = self.observation_space
         # cv2.imshow("Game Window", image)
