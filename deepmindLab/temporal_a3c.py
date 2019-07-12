@@ -54,7 +54,7 @@ class Brain:
 
         def __init__(self, test=False):
                 config = tf.ConfigProto()
-                config.gpu_options.per_process_gpu_memory_fraction = 0.9
+                config.gpu_options.per_process_gpu_memory_fraction = 0.8
                 self.session = tf.Session(config=config)
                 K.set_session(self.session)
                 K.manual_variable_initialization(True)
