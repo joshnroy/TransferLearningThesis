@@ -25,8 +25,8 @@ import deepmind_lab
 NUM_ACTIONS = 3
 ENV_SHAPE = (84, 84, 3)
 
-THREADS = 4
-OPTIMIZERS = 4
+THREADS = 10
+OPTIMIZERS = 3
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -53,7 +53,9 @@ class Brain:
         lock_queue = threading.Lock()
 
         def __init__(self, test=False):
-                self.session = tf.Session()
+                config = tf.ConfigProto()
+                config.gpu_options.per_process_gpu_memory_fraction = 0.1
+                self.session = tf.Session(config=config)
                 K.set_session(self.session)
                 K.manual_variable_initialization(True)
 

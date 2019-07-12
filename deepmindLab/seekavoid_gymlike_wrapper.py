@@ -84,7 +84,7 @@ class SeekAvoidEnv():
             action_list[0] = 1
         elif action_int == 6:
             action_list[1] = -1
-        elif action_int == 8:
+        elif action_int == 7:
             action_list[1] = 1
 
         return action_list
