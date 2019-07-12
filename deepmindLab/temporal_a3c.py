@@ -10,7 +10,7 @@ from keras.models import *
 from keras.layers import *
 from keras import backend as K
 
-from tqdm import trange
+from tqdm import trange, tqdm
 import csv
 
 from seekavoid_gymlike_wrapper import SeekAvoidEnv
@@ -22,11 +22,11 @@ import deepmind_lab
 
 
 #-- constants
-NUM_ACTIONS = 3
+NUM_ACTIONS = 8
 ENV_SHAPE = (84, 84, 3)
 
-THREADS = 10
-OPTIMIZERS = 3
+THREADS = 8
+OPTIMIZERS = 5
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -54,7 +54,7 @@ class Brain:
 
         def __init__(self, test=False):
                 config = tf.ConfigProto()
-                config.gpu_options.per_process_gpu_memory_fraction = 0.1
+                config.gpu_options.per_process_gpu_memory_fraction = 0.9
                 self.session = tf.Session(config=config)
                 K.set_session(self.session)
                 K.manual_variable_initialization(True)
@@ -406,9 +406,15 @@ if __name__ == "__main__":
     for e in envs:
             e.start()
 
-    while brain.frame_count < 3. * 1e6:
-        sys.stderr.write(str(brain.frame_count) + "\n")
+    num_frames = 1.6 * 1e7
+    tq = tqdm(total=num_frames)
+    last_frame = 0
+    while brain.frame_count < num_frames:
+        # sys.stderr.write(str(brain.frame_count) + "\n")
+        tq.update(brain.frame_count - last_frame)
+        last_frame = brain.frame_count
         time.sleep(60)
+    tq.close()
 
     for e in envs:
             e.stop()
