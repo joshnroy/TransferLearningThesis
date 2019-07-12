@@ -18,8 +18,10 @@ import deepmind_lab
 #-- constants
 # RUN_TIME = 30
 # RUN_TIME = 86000
-THREADS = 4
-OPTIMIZERS = 4
+NUM_ACTIONS = 8
+ENV_SHAPE = (84, 84, 3)
+THREADS = 8
+OPTIMIZERS = 5
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -308,36 +310,34 @@ class Optimizer(threading.Thread):
                 self.stop_signal = True
 
 #-- main
-env_test = Environment(render=False, eps_start=0., eps_end=0.)
-NUM_ACTIONS = 3
-ENV_SHAPE = (84, 84, 3)
-# ENV_SHAPE=(4,)
-NONE_STATE = np.zeros(ENV_SHAPE)
+if __name__ == "__main__":
+    env_test = Environment(render=False, eps_start=0., eps_end=0.)
+    NONE_STATE = np.zeros(ENV_SHAPE)
 
-brain = Brain() # brain is global in A3C
+    brain = Brain() # brain is global in A3C
 
-envs = [Environment() for i in range(THREADS)]
-opts = [Optimizer() for i in range(OPTIMIZERS)]
+    envs = [Environment() for i in range(THREADS)]
+    opts = [Optimizer() for i in range(OPTIMIZERS)]
 
-for o in opts:
-        o.start()
+    for o in opts:
+            o.start()
 
-for e in envs:
-        e.start()
+    for e in envs:
+            e.start()
 
-while brain.frame_count < 1.6 * 1e7:
-    sys.stderr.write(str(brain.frame_count) + "\n")
-    time.sleep(60)
+    while brain.frame_count < num_frames:
+        # sys.stderr.write(str(brain.frame_count) + "\n")
+        tq.update(brain.frame_count - last_frame)
+        last_frame = brain.frame_count
+        time.sleep(60)
+    tq.close()
 
-for e in envs:
-        e.stop()
-for e in envs:
-        e.join()
+    for e in envs:
+            e.stop()
+    for e in envs:
+            e.join()
 
-for o in opts:
-        o.stop()
-for o in opts:
-        o.join()
-
-print("Training finished. Trained for", brain.frame_count, "frames")
-# env_test.run()
+    for o in opts:
+            o.stop()
+    for o in opts:
+            o.join()

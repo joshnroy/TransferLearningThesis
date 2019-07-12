@@ -390,9 +390,6 @@ class Optimizer(threading.Thread):
 
 if __name__ == "__main__":
     env_test = Environment(render=False, eps_start=0., eps_end=0.)
-    NUM_ACTIONS = 3
-    ENV_SHAPE = (84, 84, 3)
-# ENV_SHAPE=(4,)
     NONE_STATE = np.zeros(ENV_SHAPE)
 
     brain = Brain() # brain is global in A3C
