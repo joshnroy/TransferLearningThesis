@@ -7,7 +7,7 @@ from keras.models import *
 from keras.layers import *
 from keras import backend as K
 
-from tqdm import trange
+from tqdm import trange, tqdm
 import csv
 
 from seekavoid_gymlike_wrapper import SeekAvoidEnv
@@ -34,7 +34,7 @@ EPS_STOP  = .15
 EPS_STEPS = int(1e6)
 
 MIN_BATCH = 32
-LEARNING_RATE = 5e-4
+LEARNING_RATE = 5e-5
 
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
@@ -47,7 +47,9 @@ class Brain:
         lock_queue = threading.Lock()
 
         def __init__(self):
-                self.session = tf.Session()
+                config = tf.ConfigProto()
+                config.gpu_options.per_process_gpu_memory_fraction = 0.9
+                self.session = tf.Session(config=config)
                 K.set_session(self.session)
                 K.manual_variable_initialization(True)
 
@@ -286,7 +288,7 @@ class Environment(threading.Thread):
                         if done or self.stop_signal:
                                 break
 
-                print("Total R:", R)
+                print(R)
 
         def run(self):
                 while not self.stop_signal:
@@ -325,6 +327,9 @@ if __name__ == "__main__":
     for e in envs:
             e.start()
 
+    num_frames = 1.6 * 1e7
+    tq = tqdm(total=num_frames)
+    last_frame = 0
     while brain.frame_count < num_frames:
         # sys.stderr.write(str(brain.frame_count) + "\n")
         tq.update(brain.frame_count - last_frame)
