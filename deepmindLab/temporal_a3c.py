@@ -145,7 +145,7 @@ class Brain:
 
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value])
                 if test:
-                    model.load_weights("temporal_a3c.h5")
+                    model.load_weights("temporal_a3c_done.h5")
                     for layer in model.layers:
                         layer.trainable = False
                 model.summary()
