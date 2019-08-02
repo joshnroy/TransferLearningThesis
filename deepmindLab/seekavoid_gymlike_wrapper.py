@@ -22,6 +22,7 @@ class SeekAvoidEnv():
         self.step_increment = 10
 
         level_script = "contributed/dmlab30/rooms_collect_good_objects_train" if not test else "contributed/dmlab30/rooms_collect_good_objects_test"
+        # level_script = "contributed/dmlab30/rooms_collect_good_objects_train" if not test else "contributed/dmlab30/rooms_collect_good_objects_train"
         self.env = deepmind_lab.Lab(level_script, ['RGB_INTERLEAVED'], config, renderer='hardware')
 
         self.action_space = np.zeros(3)

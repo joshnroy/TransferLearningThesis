@@ -66,7 +66,7 @@ class Brain:
                 self.default_graph = tf.get_default_graph()
                 if test:
                     with self.default_graph.as_default():
-                        self.model.load_weights("temporal_a3c.h5")
+                        self.model.load_weights("temporal_a3c_done.h5")
 
                 self.default_graph.finalize()   # avoid modifications
 
@@ -126,7 +126,7 @@ class Brain:
                 for layer in vae.layers:
                     layer.name += "_vae"
                     layer.trainable = False
-                vae.load_weights("temporal_vae.h5")
+                vae.load_weights("temporal_vae3.h5")
 
                 encoder = Model(inputs, vae.layers[-2].outputs)
                 for layer in encoder.layers:
@@ -207,7 +207,7 @@ class Brain:
                 r = r + GAMMA_N * v * s_mask    # set v to 0 where s_ is terminal state
 
                 s_t, a_t, r_t, minimize = self.graph
-                _, policy_loss, value_loss, rewards = self.session.run([minimize,
+                min_val, policy_loss, value_loss, rewards = self.session.run([minimize,
                                                                self.loss_policy,
                                                                self.loss_value, self.rewards_mean],
                                                               feed_dict={s_t:

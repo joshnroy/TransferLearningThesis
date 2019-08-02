@@ -214,7 +214,7 @@ batch_size = 100
 steps_per_epoch = int(np.round(len(glob.glob("training_observations2/*.png")) / batch_size))
 checkpoint = ModelCheckpoint('beta_vae_checkpoint.h5', monitor='val_loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
-if True:
+if False:
     img_generator = DataSequence(batch_size=batch_size)
     vae.load_weights('darla_vae.h5')
     history = vae.fit_generator(img_generator, epochs=epochs, workers=7, callbacks=[checkpoint], validation_data=(x_test, None))
