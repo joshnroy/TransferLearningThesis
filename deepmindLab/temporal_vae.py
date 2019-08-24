@@ -27,8 +27,8 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-rp_l2_loss_weight = 1.
-s_entropy_loss_term = 1.
+rp_l2_loss_weight = 0.5
+s_entropy_loss_term = 0.5
 
 
 input_shape=(84, 84, 3)
@@ -212,8 +212,8 @@ def s_loss(y_true, y_pred):
     mean_latent = y_pred[1]
     log_var_latent = y_pred[2]
 
-    s_l2_loss = K.mean(K.square(K.mean(mean_latent[0:360, rp_dim:], axis=0) - K.mean(mean_latent[360:720, rp_dim:], axis=0)))
-    s_l2_loss += K.mean(K.square(K.mean(log_var_latent[:360, rp_dim:], axis=0) - K.mean(log_var_latent[360:, rp_dim:], axis=0)))
+    s_l2_loss = s_entropy_loss_term * K.mean(K.square(K.mean(mean_latent[0:360, rp_dim:], axis=0) - K.mean(mean_latent[360:720, rp_dim:], axis=0)))
+    s_l2_loss += s_entropy_loss_term * K.mean(K.square(K.mean(log_var_latent[:360, rp_dim:], axis=0) - K.mean(log_var_latent[360:, rp_dim:], axis=0)))
 
     return s_l2_loss
 
@@ -279,21 +279,21 @@ class DataSequence(Sequence):
 epochs = 10 #30, 2
 checkpoint = ModelCheckpoint('temporal_vae_checkpoint.h5', monitor='loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
-if True:
-    vae.load_weights('temporal_vae3.h5')
+if False:
+    vae.load_weights('temporal_vae4.h5')
     img_generator = DataSequence()
     history = vae.fit_generator(img_generator, epochs=epochs, validation_data=(x_train, None))
-    vae.save_weights('temporal_vae3.h5')
+    vae.save_weights('temporal_vae4.h5')
 
 
-    plt.plot(history.history['loss'], label='train')
-    plt.plot(history.history['val_loss'], label='test')
-    plt.legend(['train', 'test'])
-    plt.show()
+    # plt.plot(history.history['loss'], label='train')
+    # plt.plot(history.history['val_loss'], label='test')
+    # plt.legend(['train', 'test'])
+    # plt.show()
 
 
 else:
-    vae.load_weights('temporal_vae3.h5')
+    vae.load_weights('temporal_vae4.h5')
 
 
 predicted_outputs = vae.predict(x_train)

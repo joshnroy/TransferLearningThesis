@@ -25,7 +25,7 @@ def main():
     env = SeekAvoidEnv(test=True)
 
     e_rewards = []
-    episodes = 100
+    episodes = 50
 
     for i in trange(episodes):
         j = 0
@@ -42,8 +42,8 @@ def main():
             j += 1
         e_rewards.append(e_reward)
     print(np.mean(e_rewards), np.std(e_rewards), np.max(e_rewards), np.min(e_rewards))
-    plt.hist(e_rewards, int(np.round(np.max(e_rewards))))
-    plt.show()
+    # plt.hist(e_rewards, int(np.round(np.max(e_rewards))))
+    # plt.show()
 
 if __name__ == "__main__":
     main()

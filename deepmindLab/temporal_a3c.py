@@ -126,7 +126,7 @@ class Brain:
                 for layer in vae.layers:
                     layer.name += "_vae"
                     layer.trainable = False
-                vae.load_weights("temporal_vae3.h5")
+                vae.load_weights("temporal_vae4.h5")
 
                 encoder = Model(inputs, vae.layers[-2].outputs)
                 for layer in encoder.layers:
@@ -134,8 +134,10 @@ class Brain:
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_extracted = encoder(l_input)
-                mean = Lambda(lambda x: x[:, 16:])(l_extracted[0])
-                log_var = Lambda(lambda x: x[:, 16:])(l_extracted[1])
+
+                # TODO: THIS IS USING RP CURRENTLY, PLS CHANGE BACK
+                mean = Lambda(lambda x: x[:, :16])(l_extracted[0])
+                log_var = Lambda(lambda x: x[:, :16])(l_extracted[1])
                 l_hidden = Concatenate()([mean, log_var])
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
