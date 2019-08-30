@@ -27,7 +27,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-rp_l2_loss_weight = 0.5
+rp_l2_loss_weight = 1.
 s_entropy_loss_term = 0.5
 
 
@@ -160,7 +160,7 @@ for layer in denoising_encoder.layers:
 
 
 def load_small_dataset():
-    imgs = np.asarray([cv2.imread(x) for x in tqdm(glob.glob("training_observations2/obs_104_*.png") + glob.glob("training_observations2/obs_105_*.png"))])
+    imgs = np.asarray([cv2.imread(x) for x in tqdm(glob.glob("training_observations2/obs_104_*.png") + glob.glob("training_observations2/obs_111_*.png"))])
     x_train = imgs[:, :]
     x_test = imgs[128:, :]
     x_train = x_train.astype('float32') / 255.
@@ -183,37 +183,50 @@ def recon_loss(y_true, y_pred):
     reconstruction_loss = K.mean(reconstruction_loss, axis=-1)
     return reconstruction_loss
 
+# def rp_loss(y_true, y_pred):
+#     mean_latent = y_pred[1]
+#     log_var_latent = y_pred[2]
+#     rp_l2_loss = rp_l2_loss_weight * (K.mean(K.square(mean_latent[1:360, :rp_dim] -
+#                                                       mean_latent[0:359, :rp_dim])) +
+#                                       K.mean(K.square(log_var_latent[1:360, :rp_dim] -
+#                                                       log_var_latent[0:359, :rp_dim])))
+
+#     rp_l2_loss += rp_l2_loss_weight * (K.mean(K.square(mean_latent[361:720, :rp_dim] -
+#                                                       mean_latent[360:719, :rp_dim])) +
+#                                       K.mean(K.square(log_var_latent[361:720, :rp_dim] -
+#                                                       log_var_latent[360:719, :rp_dim])))
+#     return rp_l2_loss
+
 def rp_loss(y_true, y_pred):
     mean_latent = y_pred[1]
     log_var_latent = y_pred[2]
-    rp_l2_loss = rp_l2_loss_weight * (K.mean(K.square(mean_latent[1:360, :rp_dim] -
-                                                      mean_latent[0:359, :rp_dim])) +
-                                      K.mean(K.square(log_var_latent[1:360, :rp_dim] -
-                                                      log_var_latent[0:359, :rp_dim])))
 
-    rp_l2_loss += rp_l2_loss_weight * (K.mean(K.square(mean_latent[361:720, :rp_dim] -
-                                                      mean_latent[360:719, :rp_dim])) +
-                                      K.mean(K.square(log_var_latent[361:720, :rp_dim] -
-                                                      log_var_latent[360:719, :rp_dim])))
-    return rp_l2_loss
+    mean_latent_first_1 = mean_latent[0:359, :rp_dim]
+    log_var_latent_first_1 = K.exp(log_var_latent[0:359, :rp_dim])
+    mean_latent_first_2 = mean_latent[1:360, :rp_dim]
+    log_var_latent_first_2 = K.exp(log_var_latent[1:360, :rp_dim])
 
+    kl_div = 0.5 * (K.square(log_var_latent_first_1 / log_var_latent_first_2) + K.square(mean_latent_first_2 - mean_latent_first_1) / log_var_latent_first_2 - 1. + 2 * K.log(log_var_latent_first_2 / log_var_latent_first_1)) / 360.
 
-def entropy(x):
-    return 0.5
+    mean_latent_second_1 = mean_latent[360:719, :rp_dim]
+    log_var_latent_second_1 = K.exp(log_var_latent[360:719, :rp_dim])
+    mean_latent_second_2 = mean_latent[361:720, :rp_dim]
+    log_var_latent_second_2 = K.exp(log_var_latent[361:720, :rp_dim])
 
-def entropy_loss(y_true, y_pred):
-    mean_latent = y_pred[1]
-    log_var_latent = y_pred[2]
-    # s_entropy_loss = s_entropy_loss_term * (entropy(mean_latent) + entropy(log_var_latent))
-    s_entropy_loss = s_entropy_loss_term * 0.5 * K.max([K.mean(K.sum(log_var_latent[:, rp_dim:], axis=1)), 0.])
-    return s_entropy_loss
+    kl_div += 0.5 * (K.square(log_var_latent_second_1 / log_var_latent_second_2) + K.square(mean_latent_second_2 - mean_latent_second_1) / log_var_latent_second_2 - 1. + 2 * K.log(log_var_latent_second_2 / log_var_latent_second_1)) / 360.
+
+    return rp_l2_loss_weight * kl_div
 
 def s_loss(y_true, y_pred):
     mean_latent = y_pred[1]
     log_var_latent = y_pred[2]
 
-    s_l2_loss = s_entropy_loss_term * K.mean(K.square(K.mean(mean_latent[0:360, rp_dim:], axis=0) - K.mean(mean_latent[360:720, rp_dim:], axis=0)))
-    s_l2_loss += s_entropy_loss_term * K.mean(K.square(K.mean(log_var_latent[:360, rp_dim:], axis=0) - K.mean(log_var_latent[360:, rp_dim:], axis=0)))
+    s_l2_loss = s_entropy_loss_term * K.mean(K.square(
+        K.mean(mean_latent[0:360, rp_dim:], axis=0) - \
+        K.mean(mean_latent[360:720, rp_dim:], axis=0)))
+    s_l2_loss += s_entropy_loss_term * K.mean(K.square(
+        K.mean(log_var_latent[:360, rp_dim:], axis=0) - \
+        K.mean(log_var_latent[360:, rp_dim:], axis=0)))
 
     return s_l2_loss
 
@@ -224,7 +237,6 @@ mean_output = output[:, :, :, :3]
 log_var_output = output[:, :, :, 3:]
 reconstruction_loss = recon_loss(None, vae.outputs)
 rp_l2_loss = rp_loss(None, vae.outputs)
-# s_entropy_loss = entropy_loss(None, vae.outputs)
 s_l2_loss = s_loss(None, vae.outputs)
 
 
@@ -232,7 +244,7 @@ beta = 1.
 kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
 kl_loss = K.mean(kl_loss, axis=[-1, -2, -3])
 kl_loss *= -0.5
-vae_loss = K.mean(reconstruction_loss + beta * kl_loss) + K.mean(rp_l2_loss) + K.mean(s_l2_loss)
+vae_loss = K.mean(reconstruction_loss + beta * kl_loss) + K.mean(rp_l2_loss)# + K.mean(s_l2_loss)
 vae.add_loss(vae_loss)
 
 learning_rate = 1e-4
@@ -274,64 +286,71 @@ class DataSequence(Sequence):
             self.curr_episode = (self.curr_episode + 2) % self.num_episodes
         return batch_x, None
 
-
-
-epochs = 10 #30, 2
+epochs = 10
 checkpoint = ModelCheckpoint('temporal_vae_checkpoint.h5', monitor='loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
 if False:
-    vae.load_weights('temporal_vae4.h5')
+    vae.load_weights('temporal_vae_kl.h5')
     img_generator = DataSequence()
     history = vae.fit_generator(img_generator, epochs=epochs, validation_data=(x_train, None))
-    vae.save_weights('temporal_vae4.h5')
+    vae.save_weights('temporal_vae_kl.h5')
 
 
-    # plt.plot(history.history['loss'], label='train')
-    # plt.plot(history.history['val_loss'], label='test')
-    # plt.legend(['train', 'test'])
-    # plt.show()
+    if False:
+        plt.plot(history.history['loss'], label='train')
+        plt.plot(history.history['val_loss'], label='test')
+        plt.legend(['train', 'test'])
+        plt.show()
 
 
 else:
-    vae.load_weights('temporal_vae4.h5')
+    vae.load_weights('temporal_vae_kl.h5')
+    # vae.load_weights('darla_vae.h5')
 
 
 predicted_outputs = vae.predict(x_train)
-predicted_imgs = predicted_outputs[0][:, :, :, :3]
+# predicted_imgs = predicted_outputs[0][:, :, :, :3]
 cv2.imwrite("original.png", x_train[35] * 255.)
 
 predicted_means = predicted_outputs[1]
 predicted_log_vars = predicted_outputs[2]
-predicted_rp_l2 = np.mean((predicted_means[1:, :rp_dim] - predicted_means[:-1, :rp_dim])**2 + (predicted_log_vars[1:, :rp_dim] - predicted_log_vars[:-1, :rp_dim]))
 
-denoised_originals = denoising_encoder.predict(x_train)
-denoised_predicted = denoising_encoder.predict(predicted_imgs)
-predicted_reconstruction_loss = np.mean((denoised_originals - denoised_predicted)**2)
-
-predicted_s_loss = np.mean((np.mean(predicted_outputs[1][0:360, rp_dim:], axis=0) - np.mean(predicted_outputs[1][360:720, rp_dim:], axis=0)) ** 2)
-predicted_s_loss += np.mean((np.mean(predicted_outputs[2][:360, rp_dim:], axis=0) - np.mean(predicted_outputs[2][360:, rp_dim:], axis=0)) ** 2)
-
-# print(predicted_means[0, :], predicted_log_vars[0, :])
-# plt.plot(predicted_means[0, :], color='r')
-# plt.plot(predicted_log_vars[0, :], color='b')
-# plt.show()
-
-# sys.exit()
-print("RP L2 LOSS", predicted_rp_l2)
-print("S LOSS", predicted_s_loss)
-# for i in range(16):
-#     plt.plot(predicted_means[:, i], color='r', alpha=1)
-#     # plt.plot(predicted_log_vars[:, i], color='r', alpha=1)
-# for i in range(16, 32):
-#     plt.plot(predicted_means[:, i], color='b', alpha=0.2)
-#     # plt.plot(predicted_log_vars[:, i], color='b', alpha=0.2)
-# plt.show()
-print("RECONSTRUCTION LOSS", predicted_reconstruction_loss)
-
-if False:
-    predicted_imgs = (predicted_imgs - predicted_imgs.min()) / (predicted_imgs.max() - predicted_imgs.min())
-    cv2.imwrite("predicted.png", predicted_imgs[118])
-else:
+if True:
+    predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
     denoised_predicted = denoising.predict(predicted_imgs)
-    denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
-    cv2.imwrite("denoised_temporal.png", denoised_imgs * 255.)
+    denoised_imgs = np.clip(denoised_predicted, 0., 1.)
+
+    recon_loss = np.mean((denoised_imgs - x_train)**2)
+    print("RECONSTRUCTION_LOSS", recon_loss)
+
+    rp_l2_loss = rp_l2_loss_weight * np.mean((predicted_means[0:359, :16] - predicted_means[1:360, :16])**2) + np.mean((predicted_means[360:719, :16] - predicted_means[361:720, :16])**2)
+    print("RP L2 LOSS", rp_l2_loss)
+
+if True:
+    for j in trange(0, 32):
+        step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
+        predicted_min = predicted_means[:, j].min()
+        predicted_originals = predicted_means[:, j]
+        for i in range(51):
+            # Change the RP
+            v = (i * step_size) + predicted_min
+            predicted_means[:, j] = v
+
+            # Predict, decode, denoise, and write to file
+            predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
+            denoised_predicted = denoising.predict(predicted_imgs)
+            denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
+            str_i = str(i)
+            if i < 10:
+                str_i = "0" + str_i
+            str_j = str(j)
+            if j < 10:
+                str_j = "0" + str_j
+            cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
+        predicted_means[:, j] = predicted_originals
+
+# for i in range(16):
+#     plt.plot(predicted_means[:, i], color='r', alpha=0.2)
+# for i in range(16, 32):
+#     plt.plot(predicted_means[:, i], color='b', alpha=0.5)
+# plt.show()

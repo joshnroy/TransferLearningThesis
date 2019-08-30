@@ -25,7 +25,7 @@ def main():
     env = SeekAvoidEnv(test=True)
 
     e_rewards = []
-    episodes = 50
+    episodes = 300
 
     for i in trange(episodes):
         j = 0
