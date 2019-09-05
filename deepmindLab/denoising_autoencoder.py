@@ -36,7 +36,7 @@ input_shape = (image_size, image_size, 3)
 # network parameters
 batch_size = 128
 latent_dim = 100
-epochs = 10
+epochs = 3
 
 def remove_patch(x):
     low_x = np.random.randint(0, image_size-1)
