@@ -29,8 +29,7 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 
 import deepmind_lab
 
-
-NUM_DATA_SAMPLES = 100
+NUM_DATA_SAMPLES = 10000
 
 def run():
     """Construct and start the environment."""
@@ -38,16 +37,25 @@ def run():
     env = SeekAvoidEnv()
     nb_actions = env.action_space.size
 
+    FOLDER_NAME = "vae_training_data/"
+
+
     for i in trange(NUM_DATA_SAMPLES):
+        action_list_episode = []
+        reward_list_episode = []
         observations = env.reset()
-        observations *= 255.
+        observations_list_episode = []
         done = False
-        j = 0
         while not done:
-            cv2.imwrite("training_observations/obs_" + str(i) + "_" + str(j) + ".png", observations)
-            observations, reward, done, _ = env.step(np.random.randint(0, high=nb_actions))
-            observations *= 255.
-            j += 1
+            observations_list_episode.append(observations)
+            action = np.random.randint(0, high=nb_actions)
+            action_list_episode.append(action)
+            observations, reward, done, _ = env.step(action)
+            reward_list_episode.append(reward)
+        observations_list_episode = np.array(observations_list_episode)
+        action_list_episode = np.array(action_list_episode)
+        reward_list_episode = np.array(reward_list_episode)
+        np.savez_compressed(FOLDER_NAME + "episode_data" + str(i), actions=action_list_episode, rewards=reward_list_episode, observations=observations_list_episode)
 
 if __name__ == '__main__':
     run()
