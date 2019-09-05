@@ -102,7 +102,7 @@ x_decoder = Conv2DTranspose(filters=3, kernel_size=1, strides=1,
                             activation='sigmoid', padding='same')(x_decoder)
 x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
 
-# instantiate VAE model
+# instantiate
 denoising = Model(inputs, x_decoder, name='vae')
 denoising.compile(loss='mse', optimizer='adam')
 
@@ -111,6 +111,7 @@ if __name__ == '__main__':
     denoising.load_weights("denoising_autoencoder.h5")
     history = denoising.fit_generator(img_generator, epochs=epochs, workers=9)
     denoising.save_weights("denoising_autoencoder.h5")
+    denoising.save("full_denoising_autoencoder.h5")
 
     # Test the autoencoder
     if True:
