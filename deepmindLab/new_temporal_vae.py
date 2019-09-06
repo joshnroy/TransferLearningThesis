@@ -21,7 +21,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 3
+epochs = 1
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
