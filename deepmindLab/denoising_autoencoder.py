@@ -36,7 +36,7 @@ input_shape = (image_size, image_size, 3)
 # network parameters
 batch_size = 128
 latent_dim = 100
-epochs = 3
+epochs = 2
 
 def remove_patch(x):
     low_x = np.random.randint(0, image_size-1)
@@ -108,7 +108,7 @@ denoising.compile(loss='mse', optimizer='adam')
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    denoising.load_weights("denoising_autoencoder.h5")
+    # denoising.load_weights("denoising_autoencoder.h5")
     history = denoising.fit_generator(img_generator, epochs=epochs, workers=9)
     denoising.save_weights("denoising_autoencoder.h5")
     denoising.save("full_denoising_autoencoder.h5")

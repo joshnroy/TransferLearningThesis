@@ -21,13 +21,13 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 1
+epochs = 3
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-config.gpu_options.per_process_gpu_memory_fraction = 0.8
+config.gpu_options.per_process_gpu_memory_fraction = 0.9
 keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 class DataSequence(Sequence):
@@ -45,7 +45,9 @@ class DataSequence(Sequence):
 
     def __getitem__(self, idx):
         data = np.load(self.filenames[self.i])
-        batch_x = [data["observations"], data["actions"]]
+        observations = data["observations"]
+        actions = np.expand_dims(data["actions"], axis=-1)
+        batch_x = [observations, actions]
         # batch_y = np.copy(data["observations"])
         self.i = (self.i + 1) // len(self.filenames)
 
@@ -72,7 +74,7 @@ rp_dim = int(np.round(latent_dim * 0.5))
 s_dim = latent_dim - rp_dim
 input_shape = (84, 84, 3)
 
-# build encoder networ
+# build encoder network
 encoder_input = Input(shape=input_shape, name='encoder_input')
 x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(encoder_input)
 x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
@@ -84,8 +86,12 @@ x_inputs = Dense(256, activation='relu')(x_inputs)
 
 z_mean = Dense(latent_dim, name='z_mean', activation='relu')(x_inputs)
 z_log_var = Dense(latent_dim, name='z_log_var', activation='relu')(x_inputs)
-latents = Concatenate()([z_mean, z_log_var])
 
+encoder = Model(encoder_input, [z_mean, z_log_var])
+
+decoder_input_mean = Input(shape=(latent_dim,), name="decoder_input_mean")
+decoder_input_log_var = Input(shape=(latent_dim,), name="decoder_input_log_var")
+latents = Concatenate()([decoder_input_mean, decoder_input_log_var])
 x_decoder = Dense(256, activation='relu')(latents)
 x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
 x_decoder = Reshape((6, 6, 64))(x_decoder)
@@ -98,37 +104,48 @@ x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', stride
 x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
 x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
 
+decoder = Model([decoder_input_mean, decoder_input_log_var], x_decoder)
+
 # instantiate prediction network
-z_mean_rp = Lambda(lambda x: x[:, :rp_dim])(z_mean)
-z_log_var_rp = Lambda(lambda x: x[:, :rp_dim])(z_log_var)
+prediction_input_mean = Input(shape=(latent_dim,), name="prediction_input_mean")
+prediction_input_log_var = Input(shape=(latent_dim,), name="prediction_input_log_var")
+a_input = Input(shape=(1,), name='action_inputs')
+
+z_mean_rp = Lambda(lambda x: x[:, :rp_dim])(prediction_input_mean)
+z_log_var_rp = Lambda(lambda x: x[:, :rp_dim])(prediction_input_log_var)
 render_parameters = Concatenate()([z_mean_rp, z_log_var_rp])
 
-z_mean_s = Lambda(lambda x: x[:, rp_dim:])(z_mean)
-z_log_var_s = Lambda(lambda x: x[:, rp_dim:])(z_log_var)
+z_mean_s = Lambda(lambda x: x[:, rp_dim:])(prediction_input_mean)
+z_log_var_s = Lambda(lambda x: x[:, rp_dim:])(prediction_input_log_var)
 state_parameters = Concatenate()([z_mean_s, z_log_var_s])
 
-a_input = Input(shape=(1,), name='action_inputs')
 prediction_inputs = Concatenate()([state_parameters, a_input])
 predicted_state_parameters = Dense(256, activation='relu')(prediction_inputs)
 predicted_state_parameters = Dense(256, activation='relu')(predicted_state_parameters)
 predicted_state_parameters = Dense(latent_dim, activation='relu')(predicted_state_parameters)
 
-inputs = [encoder_input, a_input]
+predictor = Model([prediction_input_mean, prediction_input_log_var, a_input], [predicted_state_parameters, render_parameters, state_parameters])
+
+a_top_input = Input(shape=(1,), name="top_action_inputs")
+inputs = [encoder_input, a_top_input]
 
 # instantiate temporal_vae model
-outputs = [x_decoder, render_parameters, state_parameters, predicted_state_parameters]
-temporal_vae = Model(inputs, outputs, name='vae')
+encoder_outputs = encoder(encoder_input) # z_mean, z_log_var
+predictor_outputs = predictor([encoder_outputs[0], encoder_outputs[1], a_top_input])
+reconstruction = decoder([encoder_outputs[0], encoder_outputs[1]])
+outputs = [reconstruction, predictor_outputs[1], predictor_outputs[2], predictor_outputs[0], z_mean, z_log_var]
+temporal_vae = Model(inputs, outputs, name='temporal_vae')
 
 # Adding loss function
 # Reconstruction loss
 denoising = load_model('full_denoising_autoencoder.h5')
 denoising.compile(loss='mse', optimizer='adam')
 
-denoising_encoder = Model(denoising.inputs, [denoising.layers[-10].output]) # TODO: Make this actually the denoising encoder
+denoising_encoder = Model(denoising.inputs, [denoising.layers[-10].output])
 for layer in denoising_encoder.layers:
     layer.trainable = False
 
-sampled_reconstructions = sampling([x_decoder[:, :, :, :3], x_decoder[:, :, :, 3:]])
+sampled_reconstructions = sampling([outputs[0][:, :, :, :3], outputs[0][:, :, :, 3:]])
 
 reconstruction_loss = K.mean((denoising_encoder(sampled_reconstructions) - denoising_encoder(encoder_input))**2)
 
@@ -139,10 +156,10 @@ kl_loss = K.mean(kl_loss, axis=-1)
 kl_loss *= -0.5
 
 # RP loss
-rp_loss = K.mean((render_parameters[1:, :] - render_parameters[:-1, :])**2)
+rp_loss = K.mean((outputs[1][1:, :] - outputs[1][:-1, :])**2)
 
 # Prediction loss
-prediction_loss = K.mean((state_parameters - predicted_state_parameters)**2)
+prediction_loss = K.mean((outputs[2][:-1, :] - outputs[3][1:, :])**2)
 
 # Add the loss
 vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + K.mean(prediction_loss)
@@ -152,14 +169,42 @@ temporal_vae.add_loss(vae_loss)
 learning_rate = 1e-4
 adam = Adam(lr=learning_rate)
 temporal_vae.compile(optimizer=adam)
-temporal_vae.summary()
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    # temporal_vae.load_weights("denoising_autoencoder.h5")
+    # temporal_vae.load_weights("temporal_vae.h5")
     history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
     temporal_vae.save_weights("temporal_vae.h5")
     temporal_vae.save("full_temporal_vae.h5")
 
-    plt.plot(history.history["loss"])
-    plt.show()
+    if False: # Test the temporal autoencoder
+# Load Data
+        data = np.load(glob.glob("vae_training_data/*")[0])
+        observations = data["observations"]
+        actions = data["actions"]
+
+        predictions = temporal_vae.predict([observations, actions])
+        predicted_means = predictions[-2]
+        predicted_log_vars = predictions[-1]
+
+        for j in trange(0, 32):
+            step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
+            predicted_min = predicted_means[:, j].min()
+            predicted_originals = predicted_means[:, j]
+            for i in range(51):
+                # Change the RP
+                v = (i * step_size) + predicted_min
+                predicted_means[:, j] = v
+
+                # Predict, decode, denoise, and write to file
+                predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
+                denoised_predicted = denoising.predict(predicted_imgs)
+                denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
+                str_i = str(i)
+                if i < 10:
+                    str_i = "0" + str_i
+                str_j = str(j)
+                if j < 10:
+                    str_j = "0" + str_j
+                cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
+            predicted_means[:, j] = predicted_originals
