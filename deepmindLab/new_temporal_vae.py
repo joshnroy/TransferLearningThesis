@@ -156,7 +156,8 @@ kl_loss = K.mean(kl_loss, axis=-1)
 kl_loss *= -0.5
 
 # RP loss
-rp_loss = K.mean((outputs[1][1:, :] - outputs[1][:-1, :])**2)
+# rp_loss = K.mean((outputs[1][:, :] - outputs[1][:-1, :])**2)
+rp_loss = K.mean(K.var(outputs[1], axis=0))
 
 # Prediction loss
 prediction_loss = K.mean((outputs[2][1:, :] - outputs[3][:-1, :])**2)
@@ -172,8 +173,8 @@ temporal_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    temporal_vae.load_weights("temporal_vae.h5")
-    if False:
+    # temporal_vae.load_weights("temporal_vae.h5")
+    if True:
         history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
         temporal_vae.save_weights("temporal_vae.h5")
         temporal_vae.save("full_temporal_vae.h5")
