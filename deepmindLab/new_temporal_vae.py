@@ -21,7 +21,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 5
+epochs = 1
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -32,7 +32,7 @@ keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("vae_training_data/*")[0:100]
+        self.filenames = glob.glob("vae_training_data/*")#[0:100]
         self.image_size = 84
         self.curr_episode = 0
         self.i = 0
@@ -163,7 +163,7 @@ rp_loss = K.mean(K.var(outputs[1], axis=0))
 prediction_loss = K.mean((outputs[2][1:, :] - outputs[3][:-1, :])**2)
 
 # Add the loss
-vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + 0. * K.mean(prediction_loss)
+vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + K.mean(prediction_loss)
 temporal_vae.add_loss(vae_loss)
 
 # Compile the temporal vae
@@ -173,7 +173,7 @@ temporal_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    # temporal_vae.load_weights("temporal_vae.h5")
+    temporal_vae.load_weights("temporal_vae.h5")
     if True:
         history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
         temporal_vae.save_weights("temporal_vae.h5")
