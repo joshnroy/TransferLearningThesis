@@ -21,7 +21,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 1
+epochs = 5
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -32,7 +32,7 @@ keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("vae_training_data/*")
+        self.filenames = glob.glob("vae_training_data/*")[0:100]
         self.image_size = 84
         self.curr_episode = 0
         self.i = 0
@@ -84,7 +84,7 @@ x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, paddi
 x_inputs = Flatten()(x_inputs)
 x_inputs = Dense(256, activation='relu')(x_inputs)
 
-z_mean = Dense(latent_dim, name='z_mean', activation='relu')(x_inputs)
+z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
 z_log_var = Dense(latent_dim, name='z_log_var', activation='relu')(x_inputs)
 
 encoder = Model(encoder_input, [z_mean, z_log_var])
@@ -159,10 +159,10 @@ kl_loss *= -0.5
 rp_loss = K.mean((outputs[1][1:, :] - outputs[1][:-1, :])**2)
 
 # Prediction loss
-prediction_loss = K.mean((outputs[2][:-1, :] - outputs[3][1:, :])**2)
+prediction_loss = K.mean((outputs[2][1:, :] - outputs[3][:-1, :])**2)
 
 # Add the loss
-vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + K.mean(prediction_loss)
+vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + 0. * K.mean(prediction_loss)
 temporal_vae.add_loss(vae_loss)
 
 # Compile the temporal vae
@@ -172,12 +172,14 @@ temporal_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    # temporal_vae.load_weights("temporal_vae.h5")
-    history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-    temporal_vae.save_weights("temporal_vae.h5")
-    temporal_vae.save("full_temporal_vae.h5")
+    temporal_vae.load_weights("temporal_vae.h5")
+    if False:
+        history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
+        temporal_vae.save_weights("temporal_vae.h5")
+        temporal_vae.save("full_temporal_vae.h5")
 
-    if False: # Test the temporal autoencoder
+
+    if True: # Test the temporal autoencoder
 # Load Data
         data = np.load(glob.glob("vae_training_data/*")[0])
         observations = data["observations"]
@@ -187,24 +189,41 @@ if __name__ == '__main__':
         predicted_means = predictions[-2]
         predicted_log_vars = predictions[-1]
 
-        for j in trange(0, 32):
-            step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
-            predicted_min = predicted_means[:, j].min()
-            predicted_originals = predicted_means[:, j]
-            for i in range(51):
-                # Change the RP
-                v = (i * step_size) + predicted_min
-                predicted_means[:, j] = v
+        if False:
+            for j in trange(0, 32):
+                step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
+                predicted_min = predicted_means[:, j].min()
+                predicted_originals = predicted_means[:, j]
+                for i in range(51):
+                    # Change the RP
+                    v = (i * step_size) + predicted_min
+                    predicted_means[:, j] = v
 
-                # Predict, decode, denoise, and write to file
-                predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
-                denoised_predicted = denoising.predict(predicted_imgs)
-                denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
-                str_i = str(i)
-                if i < 10:
-                    str_i = "0" + str_i
-                str_j = str(j)
-                if j < 10:
-                    str_j = "0" + str_j
-                cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
-            predicted_means[:, j] = predicted_originals
+                    # Predict, decode, denoise, and write to file
+                    predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
+                    denoised_predicted = denoising.predict(predicted_imgs)
+                    denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
+                    str_i = str(i)
+                    if i < 10:
+                        str_i = "0" + str_i
+                    str_j = str(j)
+                    if j < 10:
+                        str_j = "0" + str_j
+                    cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
+                predicted_means[:, j] = predicted_originals
+
+# Print loss values
+        rps = predictions[1]
+        print("RP LOSS VALUE", np.mean((rps[1:, :] - rps[:-1, :])**2))
+        ss = predictions[2]
+        pss = predictions[3]
+        print("PREDICTION LOSS VALUE", np.mean((ss[1:, :] - pss[:-1, :])**2))
+
+# Plot RP, S
+        rps = np.transpose(rps)
+        for r in rps:
+            plt.plot(r, color='b', alpha=0.1)
+        ss = np.transpose(ss)
+        for s in ss:
+            plt.plot(s, color='r', alpha=0.1)
+        plt.savefig("plot.png")
