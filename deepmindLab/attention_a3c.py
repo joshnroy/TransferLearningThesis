@@ -20,9 +20,12 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 
 import deepmind_lab
 
-
-# In[ ]:
-
+from keras.backend.tensorflow_backend import set_session
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.9
+set_session(tf.Session(config=config))
 
 #-- constants
 # RUN_TIME = 30
@@ -74,77 +77,28 @@ class Brain:
 
                 self.frame_count = 0
 
-                self.csvfile = open("darla_a3c_history.csv", 'w')
+                self.csvfile = open("attention_a3c_history.csv", 'w')
                 self.csvwriter = csv.writer(self.csvfile, delimiter=',', quotechar='"')
-                self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Reward', 'Frame Count'])
+                self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Attention Loss', 'Reward', 'Frame Count'])
 
         def _build_model(self, test):
 
-                # network parameters
-                latent_dim = 32
-                input_shape = (84, 84, 3)
-
-# build encoder model
-                inputs = Input(shape=input_shape, name='encoder_input')
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(inputs)
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-
-                x_inputs = Flatten()(x_inputs)
-                x_inputs = Dense(256, activation='relu')(x_inputs)
-                z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
-                z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
-
-# instantiate encoder model
-                encoder = Model(inputs, [z_mean, z_log_var], name='encoder')
-                encoder.summary()
-
-
-# build decoder model
-                input_z_mean = Input(shape=(latent_dim,))
-                input_z_log_var = Input(shape=(latent_dim,))
-                latent_inputs = Concatenate()([input_z_mean, input_z_log_var])
-                x_decoder = Dense(256, activation='relu')(latent_inputs)
-                x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
-                x_decoder = Reshape((6, 6, 64))(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
-                x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
-
-# instantiate decoder model
-                decoder = Model([input_z_mean, input_z_log_var], x_decoder, name='decoder')
-                decoder.summary()
-
-# instantiate VAE model
-                encoder_outputs = encoder(inputs)
-                outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
-                vae = Model(inputs, outputs, name='vae')
-                for layer in vae.layers:
-                    layer.name += "_vae"
-                    layer.trainable = False
+                loaded_json = open("darla_vae_arch.json").read()
+                vae = model_from_json(loaded_json)
                 vae.load_weights("darla_vae.h5")
-
-                encoder = Model(inputs, vae.layers[-2].outputs)
+                encoder = Model(vae.layers[-5].inputs, vae.layers[-5].outputs)
                 for layer in encoder.layers:
                     layer.trainable = False
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_hidden = encoder(l_input)
                 l_hidden = Concatenate()(l_hidden)
-                print(l_hidden.shape)
-                sys.exit()
 
                 # Learn the attention weights on each factor
                 l_weights = Dense(512, activation='relu')(l_hidden)
                 l_weights = Dense(64, activation='sigmoid')(l_weights)
 
-                l_hidden = Lambda(lambda x: x[0] * x[1])([l_hidden, l_weights]) # Multiply the attention
+                l_hidden = Lambda(lambda x: x[0] * x[1])([l_hidden, l_weights]) # Element-wise multiply the attention
 
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
@@ -152,7 +106,7 @@ class Brain:
                 out_value   = Dense(1, activation='linear')(l_hidden)
 
 
-                model = Model(inputs=[l_input], outputs=[out_actions, out_value])
+                model = Model(inputs=[l_input], outputs=[out_actions, out_value, l_weights])
                 if test:
                     model.load_weights("darla_a3c.h5")
                     for layer in model.layers:
@@ -169,7 +123,7 @@ class Brain:
 
                 self.rewards_mean = tf.reduce_mean(r_t)
 
-                p, v = model(s_t)
+                p, v, attention_weights = model(s_t)
 
                 log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
                 advantage = r_t - v
@@ -184,7 +138,10 @@ class Brain:
                 entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10),
                                                        axis=1, keep_dims=True)
 
-                self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+                # enforce sparsity on attention
+                self.loss_attention = tf.reduce_sum(tf.abs(attention_weights))
+
+                self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
                 optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
                 minimize = optimizer.minimize(self.loss_total)
@@ -216,9 +173,9 @@ class Brain:
                 r = r + GAMMA_N * v * s_mask    # set v to 0 where s_ is terminal state
 
                 s_t, a_t, r_t, minimize = self.graph
-                _, policy_loss, value_loss, rewards = self.session.run([minimize,
+                _, policy_loss, value_loss, attention_loss, rewards = self.session.run([minimize,
                                                                self.loss_policy,
-                                                               self.loss_value, self.rewards_mean],
+                                                               self.loss_value, self.loss_attention, self.rewards_mean],
                                                               feed_dict={s_t:
                                                                          s,
                                                                          a_t:
@@ -228,7 +185,7 @@ class Brain:
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
                     self.model.save_weights("darla_a3c.h5", overwrite=True)
-                    self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
+                    self.csvwriter.writerow([policy_loss, value_loss, attention_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 
         def train_push(self, s, a, r, s_):
@@ -246,17 +203,17 @@ class Brain:
 
         def predict(self, s):
                 with self.default_graph.as_default():
-                        p, v = self.model.predict(s)
+                        p, v, _ = self.model.predict(s)
                         return p, v
 
         def predict_p(self, s):
                 with self.default_graph.as_default():
-                        p, v = self.model.predict(s)
+                        p, v, _ = self.model.predict(s)
                         return p
 
         def predict_v(self, s):
                 with self.default_graph.as_default():
-                        p, v = self.model.predict(s)
+                        p, v, _ = self.model.predict(s)
                         return v
 
 

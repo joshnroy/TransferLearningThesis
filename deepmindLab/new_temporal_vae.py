@@ -21,7 +21,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 1
+epochs = 10
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -176,8 +176,8 @@ if __name__ == '__main__':
     temporal_vae.load_weights("temporal_vae.h5")
     if True:
         history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-        temporal_vae.save_weights("temporal_vae.h5")
-        temporal_vae.save("full_temporal_vae.h5")
+        temporal_vae.save_weights("temporal_vae2.h5")
+        temporal_vae.save("full_temporal_vae2.h5")
 
 
     if True: # Test the temporal autoencoder
@@ -190,7 +190,7 @@ if __name__ == '__main__':
         predicted_means = predictions[-2]
         predicted_log_vars = predictions[-1]
 
-        if False:
+        if True:
             for j in trange(0, 32):
                 step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
                 predicted_min = predicted_means[:, j].min()

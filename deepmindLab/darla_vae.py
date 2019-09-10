@@ -29,7 +29,7 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.9
 keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 
-epochs = 1
+epochs = 10
 
 class DataSequence(Sequence):
     def __init__(self):
@@ -85,7 +85,7 @@ x_inputs = Dense(256, activation='relu')(x_inputs)
 z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
 z_log_var = Dense(latent_dim, name='z_log_var', activation='relu')(x_inputs)
 
-encoder = Model(encoder_input, [z_mean, z_log_var])
+encoder = Model(encoder_input, [z_mean, z_log_var], name='encoder')
 
 decoder_input_mean = Input(shape=(latent_dim,), name="decoder_input_mean")
 decoder_input_log_var = Input(shape=(latent_dim,), name="decoder_input_log_var")
@@ -142,11 +142,14 @@ darla_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    # darla_vae.load_weights("darla_vae.h5")
-    if True:
+    darla_vae.load_weights("darla_vae.h5")
+    if False:
         history = darla_vae.fit_generator(img_generator, epochs=epochs, workers=9)
         darla_vae.save_weights("darla_vae.h5")
         darla_vae.save("full_darla_vae.h5")
+    json_string = darla_vae.to_json()
+    with open("darla_vae_arch.json", "w") as json_file:
+        json_file.write(json_string)
 
 
     if False: # Test the temporal autoencoder
