@@ -21,7 +21,7 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
-epochs = 10
+epochs = 3
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -47,8 +47,8 @@ class DataSequence(Sequence):
         data = np.load(self.filenames[self.i])
         observations = data["observations"]
         actions = np.expand_dims(data["actions"], axis=-1)
-        batch_x = [observations, actions]
-        # batch_y = np.copy(data["observations"])
+        rewards = np.expand_dims(data["rewards"], axis=-1)
+        batch_x = [observations, actions, rewards]
         self.i = (self.i + 1) // len(self.filenames)
 
         return batch_x, None
@@ -120,20 +120,26 @@ z_log_var_s = Lambda(lambda x: x[:, rp_dim:])(prediction_input_log_var)
 state_parameters = Concatenate()([z_mean_s, z_log_var_s])
 
 prediction_inputs = Concatenate()([state_parameters, a_input])
-predicted_state_parameters = Dense(256, activation='relu')(prediction_inputs)
-predicted_state_parameters = Dense(256, activation='relu')(predicted_state_parameters)
-predicted_state_parameters = Dense(latent_dim, activation='relu')(predicted_state_parameters)
 
-predictor = Model([prediction_input_mean, prediction_input_log_var, a_input], [predicted_state_parameters, render_parameters, state_parameters])
+predicted_hidden_state = Dense(100, activation='relu')(prediction_inputs)
+predicted_hidden_state = Dense(100, activation='relu')(predicted_hidden_state)
+predicted_state_parameters = Dense(latent_dim, activation='linear')(predicted_hidden_state)
+
+predicted_hidden_reward = Dense(100, activation='relu')(prediction_inputs)
+predicted_hidden_reward = Dense(100, activation='relu')(predicted_hidden_reward)
+predicted_rewards = Dense(1, activation='linear')(predicted_hidden_reward)
+
+predictor = Model([prediction_input_mean, prediction_input_log_var, a_input], [predicted_state_parameters, predicted_rewards, render_parameters, state_parameters])
 
 a_top_input = Input(shape=(1,), name="top_action_inputs")
-inputs = [encoder_input, a_top_input]
+r_top_input = Input(shape=(1,), name="top_reward_inputs")
+inputs = [encoder_input, a_top_input, r_top_input]
 
 # instantiate temporal_vae model
 encoder_outputs = encoder(encoder_input) # z_mean, z_log_var
 predictor_outputs = predictor([encoder_outputs[0], encoder_outputs[1], a_top_input])
 reconstruction = decoder([encoder_outputs[0], encoder_outputs[1]])
-outputs = [reconstruction, predictor_outputs[1], predictor_outputs[2], predictor_outputs[0], z_mean, z_log_var]
+outputs = [reconstruction, z_mean, z_log_var, predictor_outputs[3], predictor_outputs[2], predictor_outputs[0], predictor_outputs[1]]
 temporal_vae = Model(inputs, outputs, name='temporal_vae')
 
 # Adding loss function
@@ -141,7 +147,7 @@ temporal_vae = Model(inputs, outputs, name='temporal_vae')
 denoising = load_model('full_denoising_autoencoder.h5')
 denoising.compile(loss='mse', optimizer='adam')
 
-denoising_encoder = Model(denoising.inputs, [denoising.layers[-10].output])
+denoising_encoder = Model(denoising.inputs, [denoising.layers[-10].output], name='denoising_encoder')
 for layer in denoising_encoder.layers:
     layer.trainable = False
 
@@ -156,14 +162,18 @@ kl_loss = K.mean(kl_loss, axis=-1)
 kl_loss *= -0.5
 
 # RP loss
-# rp_loss = K.mean((outputs[1][:, :] - outputs[1][:-1, :])**2)
-rp_loss = K.mean(K.var(outputs[1], axis=0))
+rp_loss = K.mean(K.var(outputs[4], axis=0))
 
-# Prediction loss
-prediction_loss = K.mean((outputs[2][1:, :] - outputs[3][:-1, :])**2)
+# Reward Prediction loss
+alpha_reward = 1000.
+reward_prediction_loss = alpha_reward * K.mean((inputs[2] - outputs[6])**2)
+
+# State Prediction loss
+alpha_state = 10.
+state_prediction_loss = alpha_state * K.mean((outputs[3][1:, :] - outputs[5][:-1, :])**2)
 
 # Add the loss
-vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(rp_loss) + K.mean(prediction_loss)
+vae_loss = K.mean(reconstruction_loss) + K.mean(beta * kl_loss) + K.mean(reward_prediction_loss) + K.mean(state_prediction_loss) + 0. * K.mean(rp_loss)
 temporal_vae.add_loss(vae_loss)
 
 # Compile the temporal vae
@@ -173,11 +183,11 @@ temporal_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    temporal_vae.load_weights("temporal_vae.h5")
-    if True:
+    temporal_vae.load_weights("temporal_vae2.h5")
+    if False:
         history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-        temporal_vae.save_weights("temporal_vae2.h5")
-        temporal_vae.save("full_temporal_vae2.h5")
+        temporal_vae.save_weights("temporal_vae3.h5")
+        temporal_vae.save("full_temporal_vae3.h5")
 
 
     if True: # Test the temporal autoencoder
@@ -185,12 +195,13 @@ if __name__ == '__main__':
         data = np.load(glob.glob("vae_training_data/*")[0])
         observations = data["observations"]
         actions = data["actions"]
+        rewards = data["rewards"]
 
-        predictions = temporal_vae.predict([observations, actions])
-        predicted_means = predictions[-2]
-        predicted_log_vars = predictions[-1]
+        predictions = temporal_vae.predict([observations, actions, np.zeros_like(rewards)])
+        predicted_means = predictions[1]
+        predicted_log_vars = predictions[2]
 
-        if True:
+        if False:
             for j in trange(0, 32):
                 step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
                 predicted_min = predicted_means[:, j].min()
@@ -214,17 +225,18 @@ if __name__ == '__main__':
                 predicted_means[:, j] = predicted_originals
 
 # Print loss values
-        rps = predictions[1]
-        print("RP LOSS VALUE", np.mean((rps[1:, :] - rps[:-1, :])**2))
-        ss = predictions[2]
-        pss = predictions[3]
-        print("PREDICTION LOSS VALUE", np.mean((ss[1:, :] - pss[:-1, :])**2))
+        # print("RECONSTRUCTION LOSS VALUE", np.mean((denoising_encoder(predictions[0][:, :, :, :3]) - denoising_encoder(observations))**2))
+        ss = predictions[3]
+        pss = predictions[5]
+        print("STATE PREDICTION LOSS VALUE", alpha_state * np.mean((ss[1:, :] - pss[:-1, :])**2))
+        print("REWARD PREDICTION LOSS VALUE", alpha_reward * np.mean((predictions[6][:, 0] - rewards)**2))
+        print(np.round(predictions[6][:, 0]) == rewards)
 
 # Plot RP, S
-        rps = np.transpose(rps)
-        for r in rps:
-            plt.plot(r, color='b', alpha=0.1)
-        ss = np.transpose(ss)
-        for s in ss:
-            plt.plot(s, color='r', alpha=0.1)
-        plt.savefig("plot.png")
+        # rps = np.transpose(rps)
+        # for r in rps:
+        #     plt.plot(r, color='b', alpha=0.1)
+        # ss = np.transpose(ss)
+        # for s in ss:
+        #     plt.plot(s, color='r', alpha=0.1)
+        # plt.savefig("plot.png")
