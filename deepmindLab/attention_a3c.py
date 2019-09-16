@@ -20,12 +20,12 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 
 import deepmind_lab
 
-from keras.backend.tensorflow_backend import set_session
-import tensorflow as tf
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-config.gpu_options.per_process_gpu_memory_fraction = 0.9
-set_session(tf.Session(config=config))
+# from keras.backend.tensorflow_backend import set_session
+# import tensorflow as tf
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
+# config.gpu_options.per_process_gpu_memory_fraction = 0.9
+# set_session(tf.Session(config=config))
 
 #-- constants
 # RUN_TIME = 30
@@ -48,8 +48,9 @@ EPS_STEPS = int(1e6)
 MIN_BATCH = 32
 LEARNING_RATE = 5e-5
 
-LOSS_V = .5                     # v loss coefficient
-LOSS_ENTROPY = .01      # entropy coefficient
+LOSS_V = 0.5                     # v loss coefficient
+LOSS_ENTROPY = 0.01      # entropy coefficient
+LOSS_ATTENTION = 0.01
 
 
 # In[ ]:
@@ -71,7 +72,7 @@ class Brain:
                 self.default_graph = tf.get_default_graph()
                 if test:
                     with self.default_graph.as_default():
-                        self.model.load_weights("darla_a3c.h5")
+                        self.model.load_weights("attention_a3c.h5")
 
                 self.default_graph.finalize()   # avoid modifications
 
@@ -108,7 +109,7 @@ class Brain:
 
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value, l_weights])
                 if test:
-                    model.load_weights("darla_a3c.h5")
+                    model.load_weights("attention_a3c.h5")
                     for layer in model.layers:
                         layer.trainable = False
                 model.summary()
@@ -139,7 +140,7 @@ class Brain:
                                                        axis=1, keep_dims=True)
 
                 # enforce sparsity on attention
-                self.loss_attention = tf.reduce_sum(tf.abs(attention_weights))
+                self.loss_attention = tf.reduce_mean(LOSS_ATTENTION * tf.abs(attention_weights))
 
                 self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
@@ -184,7 +185,7 @@ class Brain:
                                                                          r})
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
-                    self.model.save_weights("darla_a3c.h5", overwrite=True)
+                    self.model.save_weights("attention_a3c.h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, attention_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 
@@ -203,13 +204,13 @@ class Brain:
 
         def predict(self, s):
                 with self.default_graph.as_default():
-                        p, v, _ = self.model.predict(s)
+                        p, v,  = self.model.predict(s)
                         return p, v
 
         def predict_p(self, s):
                 with self.default_graph.as_default():
-                        p, v, _ = self.model.predict(s)
-                        return p
+                        p, v, attention_weights = self.model.predict(s)
+                        return p, attention_weights
 
         def predict_v(self, s):
                 with self.default_graph.as_default():
@@ -245,7 +246,7 @@ class Agent:
 
                 else:
                         s = np.array([s])
-                        p = brain.predict_p(s)[0]
+                        p, _ = brain.predict_p(s)[0]
                         # a = np.argmax(p)
                         a = np.random.choice(NUM_ACTIONS, p=p)
 

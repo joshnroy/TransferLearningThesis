@@ -27,6 +27,28 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
+class DataSequence(Sequence):
+    def __init__(self):
+        self.filenames = glob.glob("vae_training_data/*")#[0:100]
+        self.image_size = 84
+        self.curr_episode = 0
+        self.i = 0
+
+    def on_epoch_end(self):
+        pass
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, idx):
+        data = np.load(self.filenames[self.i])
+        observations = data["observations"]
+        actions = np.expand_dims(data["actions"], axis=-1)
+        batch_x = [observations, actions]
+        # batch_y = np.copy(data["observations"])
+        self.i = (self.i + 1) // len(self.filenames)
+
+        return batch_x, None
 
 input_shape=(84, 84, 3)
 latent_dim = 100
@@ -143,7 +165,7 @@ decoder.summary()
 
 # instantiate VAE model
 encoder_outputs = encoder(inputs)
-outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
+outputs = [decoder([encoder_outputs[0], encoder_outputs[1]]), encoder_outputs[0], encoder_outputs[1]]
 vae = Model(inputs, outputs, name='vae')
 for layer in vae.layers:
     layer.name += "_vae"
@@ -174,12 +196,12 @@ x_train, y_train, x_test, y_test, image_size, input_shape = load_small_dataset()
 output = vae.outputs[0]
 mean_output = output[:, :, :, :3]
 log_var_output = output[:, :, :, 3:]
-sampled_reconstruction = sampling([mean_output, log_var_output])
+sampled_reconstruction = sampling([vae.outputs[1], vae.outputs[2]])
 reconstruction_loss = K.square(denoising_encoder(inputs) - denoising_encoder(sampled_reconstruction))
 reconstruction_loss = K.mean(reconstruction_loss, axis=-1)
 beta = 1.
 kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
-kl_loss = K.mean(kl_loss, axis=[-1, -2, -3])
+kl_loss = K.mean(kl_loss, axis=[-1])
 kl_loss *= -0.5
 vae_loss = K.mean(reconstruction_loss + beta * kl_loss)
 vae.add_loss(vae_loss)
@@ -189,23 +211,7 @@ vae.compile(optimizer=adam)
 vae.summary()
 
 
-class DataSequence(Sequence):
-    def __init__(self, batch_size=128):
-        self.batch_size = batch_size
-        self.filenames = glob.glob("training_observations2/*.png")
-        self.image_size = 84
-        self.on_epoch_end()
 
-    def on_epoch_end(self):
-        np.random.shuffle(self.filenames)
-
-    def __len__(self):
-        return int(np.floor(len(self.filenames) / self.batch_size))
-
-    def __getitem__(self, idx):
-        batch_x = np.asarray([cv2.imread(x) for x in self.filenames[idx * self.batch_size:(idx + 1) * self.batch_size]])
-        batch_x = batch_x.astype('float32') / 255.
-        return batch_x, None
 
 
 

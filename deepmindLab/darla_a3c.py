@@ -79,58 +79,10 @@ class Brain:
                 self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Reward', 'Frame Count'])
 
         def _build_model(self, test):
-
-                # network parameters
-                latent_dim = 32
-                input_shape = (84, 84, 3)
-
-# build encoder model
-                inputs = Input(shape=input_shape, name='encoder_input')
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(inputs)
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-
-                x_inputs = Flatten()(x_inputs)
-                x_inputs = Dense(256, activation='relu')(x_inputs)
-                z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
-                z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
-
-# instantiate encoder model
-                encoder = Model(inputs, [z_mean, z_log_var], name='encoder')
-                encoder.summary()
-
-
-# build decoder model
-                input_z_mean = Input(shape=(latent_dim,))
-                input_z_log_var = Input(shape=(latent_dim,))
-                latent_inputs = Concatenate()([input_z_mean, input_z_log_var])
-                x_decoder = Dense(256, activation='relu')(latent_inputs)
-                x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
-                x_decoder = Reshape((6, 6, 64))(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
-                x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
-
-# instantiate decoder model
-                decoder = Model([input_z_mean, input_z_log_var], x_decoder, name='decoder')
-                decoder.summary()
-
-# instantiate VAE model
-                encoder_outputs = encoder(inputs)
-                outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
-                vae = Model(inputs, outputs, name='vae')
-                for layer in vae.layers:
-                    layer.name += "_vae"
-                    layer.trainable = False
+                loaded_json = open("darla_vae_arch.json").read()
+                vae = model_from_json(loaded_json)
                 vae.load_weights("darla_vae.h5")
-
-                encoder = Model(inputs, vae.layers[-2].outputs)
+                encoder = Model(vae.layers[-5].inputs, vae.layers[-5].outputs)
                 for layer in encoder.layers:
                     layer.trainable = False
 

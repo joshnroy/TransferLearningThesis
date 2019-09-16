@@ -26,6 +26,7 @@ import glob
 import cv2
 import sys
 from tqdm import tqdm, trange
+from scipy.signal import savgol_filter
 
 rp_l2_loss_weight = 1.
 s_entropy_loss_term = 0.5
@@ -64,6 +65,8 @@ decoder = Model(latent_inputs, x_decoder, name='denoising_decoder')
 # instantiate VAE model
 denoising = Model(inputs, decoder(encoder(inputs)), name='denoising')
 denoising.load_weights("denoising_autoencoder.h5")
+
+denoising.save("full_denoising_autoencoder.h5")
 
 for layer in denoising.layers:
     layer.name += "_denoising"
@@ -105,7 +108,7 @@ def sampling_np(args):
 
 # network parameters
 latent_dim = 32
-rp_dim = int(np.round(latent_dim * 0.5))
+rp_dim = 30
 s_dim = latent_dim - rp_dim
 input_shape = (84, 84, 3)
 
@@ -183,39 +186,19 @@ def recon_loss(y_true, y_pred):
     reconstruction_loss = K.mean(reconstruction_loss, axis=-1)
     return reconstruction_loss
 
-# def rp_loss(y_true, y_pred):
-#     mean_latent = y_pred[1]
-#     log_var_latent = y_pred[2]
-#     rp_l2_loss = rp_l2_loss_weight * (K.mean(K.square(mean_latent[1:360, :rp_dim] -
-#                                                       mean_latent[0:359, :rp_dim])) +
-#                                       K.mean(K.square(log_var_latent[1:360, :rp_dim] -
-#                                                       log_var_latent[0:359, :rp_dim])))
-
-#     rp_l2_loss += rp_l2_loss_weight * (K.mean(K.square(mean_latent[361:720, :rp_dim] -
-#                                                       mean_latent[360:719, :rp_dim])) +
-#                                       K.mean(K.square(log_var_latent[361:720, :rp_dim] -
-#                                                       log_var_latent[360:719, :rp_dim])))
-#     return rp_l2_loss
-
 def rp_loss(y_true, y_pred):
     mean_latent = y_pred[1]
     log_var_latent = y_pred[2]
+    rp_l2_loss = rp_l2_loss_weight * (K.mean(K.square(mean_latent[1:360, :rp_dim] -
+                                                      mean_latent[0:359, :rp_dim])) +
+                                      K.mean(K.square(log_var_latent[1:360, :rp_dim] -
+                                                      log_var_latent[0:359, :rp_dim])))
 
-    mean_latent_first_1 = mean_latent[0:359, :rp_dim]
-    log_var_latent_first_1 = K.exp(log_var_latent[0:359, :rp_dim])
-    mean_latent_first_2 = mean_latent[1:360, :rp_dim]
-    log_var_latent_first_2 = K.exp(log_var_latent[1:360, :rp_dim])
-
-    kl_div = 0.5 * (K.square(log_var_latent_first_1 / log_var_latent_first_2) + K.square(mean_latent_first_2 - mean_latent_first_1) / log_var_latent_first_2 - 1. + 2 * K.log(log_var_latent_first_2 / log_var_latent_first_1)) / 360.
-
-    mean_latent_second_1 = mean_latent[360:719, :rp_dim]
-    log_var_latent_second_1 = K.exp(log_var_latent[360:719, :rp_dim])
-    mean_latent_second_2 = mean_latent[361:720, :rp_dim]
-    log_var_latent_second_2 = K.exp(log_var_latent[361:720, :rp_dim])
-
-    kl_div += 0.5 * (K.square(log_var_latent_second_1 / log_var_latent_second_2) + K.square(mean_latent_second_2 - mean_latent_second_1) / log_var_latent_second_2 - 1. + 2 * K.log(log_var_latent_second_2 / log_var_latent_second_1)) / 360.
-
-    return rp_l2_loss_weight * kl_div
+    rp_l2_loss += rp_l2_loss_weight * (K.mean(K.square(mean_latent[361:720, :rp_dim] -
+                                                      mean_latent[360:719, :rp_dim])) +
+                                      K.mean(K.square(log_var_latent[361:720, :rp_dim] -
+                                                      log_var_latent[360:719, :rp_dim])))
+    return rp_l2_loss
 
 def s_loss(y_true, y_pred):
     mean_latent = y_pred[1]
@@ -241,10 +224,11 @@ s_l2_loss = s_loss(None, vae.outputs)
 
 
 beta = 1.
+recon_loss_weight = 1.
 kl_loss = 1 + mean_output - K.square(log_var_output) - K.exp(mean_output)
 kl_loss = K.mean(kl_loss, axis=[-1, -2, -3])
 kl_loss *= -0.5
-vae_loss = K.mean(reconstruction_loss + beta * kl_loss) + K.mean(rp_l2_loss)# + K.mean(s_l2_loss)
+vae_loss = K.mean(recon_loss_weight * reconstruction_loss + beta * kl_loss) + K.mean(rp_l2_loss)# + K.mean(s_l2_loss)
 vae.add_loss(vae_loss)
 
 learning_rate = 1e-4
@@ -290,10 +274,10 @@ epochs = 10
 checkpoint = ModelCheckpoint('temporal_vae_checkpoint.h5', monitor='loss', verbose=0, save_best_only=True, mode='min', save_weights_only=True)
 
 if False:
-    vae.load_weights('temporal_vae_kl.h5')
+    # vae.load_weights('temporal_vae_l2_big_rp.h5')
     img_generator = DataSequence()
     history = vae.fit_generator(img_generator, epochs=epochs, validation_data=(x_train, None))
-    vae.save_weights('temporal_vae_kl.h5')
+    vae.save_weights('temporal_vae_l2_big_rp.h5')
 
 
     if False:
@@ -304,9 +288,11 @@ if False:
 
 
 else:
-    vae.load_weights('temporal_vae_kl.h5')
-    # vae.load_weights('darla_vae.h5')
+    # vae.load_weights('temporal_vae_l2_big_rp.h5')
+    vae.load_weights('darla_vae.h5')
 
+
+# vae.save("full_darla_vae.h5")
 
 predicted_outputs = vae.predict(x_train)
 # predicted_imgs = predicted_outputs[0][:, :, :, :3]
@@ -326,12 +312,12 @@ if True:
     rp_l2_loss = rp_l2_loss_weight * np.mean((predicted_means[0:359, :16] - predicted_means[1:360, :16])**2) + np.mean((predicted_means[360:719, :16] - predicted_means[361:720, :16])**2)
     print("RP L2 LOSS", rp_l2_loss)
 
-if True:
+if False:
     for j in trange(0, 32):
-        step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
+        step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 20.
         predicted_min = predicted_means[:, j].min()
         predicted_originals = predicted_means[:, j]
-        for i in range(51):
+        for i in range(21):
             # Change the RP
             v = (i * step_size) + predicted_min
             predicted_means[:, j] = v
@@ -349,8 +335,15 @@ if True:
             cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
         predicted_means[:, j] = predicted_originals
 
-# for i in range(16):
-#     plt.plot(predicted_means[:, i], color='r', alpha=0.2)
-# for i in range(16, 32):
+# for i in range(32):
+    # plt.plot(savgol_filter(predicted_means[:, i], 201, 3), color='r', alpha=0.5)
+    # plt.plot(predicted_means[:, i], color='r', alpha=0.5)
+# plt.show()
+
+# for i in range(rp_dim):
+#     plt.plot(predicted_means[:, i], color='r', alpha=0.5)
+    # plt.plot(savgol_filter(predicted_means[:, i], 101, 3), color='r', alpha=0.5)
+# for i in range(rp_dim, 32):
 #     plt.plot(predicted_means[:, i], color='b', alpha=0.5)
+    # plt.plot(savgol_filter(predicted_means[:, i], 101, 3), color='b', alpha=0.5)
 # plt.show()
