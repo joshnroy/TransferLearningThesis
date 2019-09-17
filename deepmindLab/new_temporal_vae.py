@@ -111,12 +111,12 @@ prediction_input_mean = Input(shape=(latent_dim,), name="prediction_input_mean")
 prediction_input_log_var = Input(shape=(latent_dim,), name="prediction_input_log_var")
 a_input = Input(shape=(1,), name='action_inputs')
 
-z_mean_rp = Lambda(lambda x: x[:, :rp_dim])(prediction_input_mean)
-z_log_var_rp = Lambda(lambda x: x[:, :rp_dim])(prediction_input_log_var)
+z_mean_rp = Lambda(lambda x: x[:, :16])(prediction_input_mean)
+z_log_var_rp = Lambda(lambda x: x[:, :16])(prediction_input_log_var)
 render_parameters = Concatenate()([z_mean_rp, z_log_var_rp])
 
-z_mean_s = Lambda(lambda x: x[:, rp_dim:])(prediction_input_mean)
-z_log_var_s = Lambda(lambda x: x[:, rp_dim:])(prediction_input_log_var)
+z_mean_s = Lambda(lambda x: x[:, 16:])(prediction_input_mean)
+z_log_var_s = Lambda(lambda x: x[:, 16:])(prediction_input_log_var)
 state_parameters = Concatenate()([z_mean_s, z_log_var_s])
 
 prediction_inputs = Concatenate()([state_parameters, a_input])
@@ -183,11 +183,15 @@ temporal_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    temporal_vae.load_weights("temporal_vae2.h5")
+    temporal_vae.load_weights("temporal_vae3.h5")
     if False:
         history = temporal_vae.fit_generator(img_generator, epochs=epochs, workers=9)
         temporal_vae.save_weights("temporal_vae3.h5")
         temporal_vae.save("full_temporal_vae3.h5")
+    json_string = temporal_vae.to_json()
+    with open("temporal_vae_arch.json", "w") as json_file:
+        json_file.write(json_string)
+
 
 
     if True: # Test the temporal autoencoder
@@ -232,11 +236,13 @@ if __name__ == '__main__':
         print("REWARD PREDICTION LOSS VALUE", alpha_reward * np.mean((predictions[6][:, 0] - rewards)**2))
         print(np.round(predictions[6][:, 0]) == rewards)
 
+        rps = predictions[4]
+
 # Plot RP, S
-        # rps = np.transpose(rps)
-        # for r in rps:
-        #     plt.plot(r, color='b', alpha=0.1)
-        # ss = np.transpose(ss)
-        # for s in ss:
-        #     plt.plot(s, color='r', alpha=0.1)
-        # plt.savefig("plot.png")
+        rps = np.transpose(rps)
+        for r in rps:
+            plt.plot(r, color='b', alpha=0.1)
+        ss = np.transpose(ss)
+        for s in ss:
+            plt.plot(s, color='r', alpha=0.1)
+        plt.savefig("plot.png")

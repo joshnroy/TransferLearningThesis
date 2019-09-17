@@ -44,6 +44,8 @@ LEARNING_RATE = 5e-5
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
 
+rp_dim = 16
+
 
 # In[ ]:
 
@@ -66,7 +68,7 @@ class Brain:
                 self.default_graph = tf.get_default_graph()
                 if test:
                     with self.default_graph.as_default():
-                        self.model.load_weights("temporal_a3c_done.h5")
+                        self.model.load_weights("new_temporal_a3c.h5")
 
                 self.default_graph.finalize()   # avoid modifications
 
@@ -77,77 +79,28 @@ class Brain:
                 self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Reward', 'Frame Count'])
 
         def _build_model(self, test):
-
-                # network parameters
-                latent_dim = 32
-                input_shape = (84, 84, 3)
-
-# build encoder model
-                inputs = Input(shape=input_shape, name='encoder_input')
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(inputs)
-                x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-                x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-
-                x_inputs = Flatten()(x_inputs)
-                x_inputs = Dense(256, activation='relu')(x_inputs)
-                z_mean = Dense(latent_dim, name='z_mean', activation='linear')(x_inputs)
-                z_log_var = Dense(latent_dim, name='z_log_var', activation='linear')(x_inputs)
-
-# instantiate encoder model
-                encoder = Model(inputs, [z_mean, z_log_var], name='encoder')
-                encoder.summary()
-
-
-# build decoder model
-                input_z_mean = Input(shape=(latent_dim,))
-                input_z_log_var = Input(shape=(latent_dim,))
-                latent_inputs = Concatenate()([input_z_mean, input_z_log_var])
-                x_decoder = Dense(256, activation='relu')(latent_inputs)
-                x_decoder = Dense(6 * 6 * 64, activation='relu')(x_decoder)
-                x_decoder = Reshape((6, 6, 64))(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-                x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
-
-                x_decoder = Conv2DTranspose(filters=6, kernel_size=1, strides=1, activation='linear', padding='same')(x_decoder)
-                x_decoder = Lambda(lambda x: x[:, :84, :84, :])(x_decoder)
-
-# instantiate decoder model
-                decoder = Model([input_z_mean, input_z_log_var], x_decoder, name='decoder')
-                decoder.summary()
-
-# instantiate VAE model
-                encoder_outputs = encoder(inputs)
-                outputs = decoder([encoder_outputs[0], encoder_outputs[1]])
-                vae = Model(inputs, outputs, name='vae')
-                for layer in vae.layers:
-                    layer.name += "_vae"
-                    layer.trainable = False
-                vae.load_weights("temporal_vae4.h5")
-
-                encoder = Model(inputs, vae.layers[-2].outputs)
+                loaded_json = open("temporal_vae_arch.json").read()
+                vae = model_from_json(loaded_json)
+                vae.load_weights("temporal_vae3.h5")
+                encoder = Model(vae.layers[-7].inputs, vae.layers[-7].outputs)
                 for layer in encoder.layers:
+                    layer.name += "_encoder"
                     layer.trainable = False
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_extracted = encoder(l_input)
 
-                # TODO: THIS IS USING RP CURRENTLY, PLS CHANGE BACK
-                mean = Lambda(lambda x: x[:, :16])(l_extracted[0])
-                log_var = Lambda(lambda x: x[:, :16])(l_extracted[1])
+                mean = Lambda(lambda x: x[:, 16:])(l_extracted[0])
+                log_var = Lambda(lambda x: x[:, 16:])(l_extracted[1])
                 l_hidden = Concatenate()([mean, log_var])
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 l_hidden = Dense(512, activation='relu')(l_hidden)
                 out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_hidden)
                 out_value   = Dense(1, activation='linear')(l_hidden)
 
-
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value])
                 if test:
-                    model.load_weights("temporal_a3c_done.h5")
+                    model.load_weights("new_temporal_a3c.h5")
                     for layer in model.layers:
                         layer.trainable = False
                 model.summary()
@@ -221,7 +174,7 @@ class Brain:
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
                     with self.default_graph.as_default():
-                        self.model.save_weights("temporal_a3c.h5", overwrite=True)
+                        self.model.save_weights("new_temporal_a3c_checkpoint.h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 
@@ -426,4 +379,4 @@ if __name__ == "__main__":
             o.join()
 
 
-    brain.model.save_weights("temporal_a3c_done.h5")
+    brain.model.save_weights("new_temporal_a3c.h5")

@@ -20,12 +20,12 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 
 import deepmind_lab
 
-# from keras.backend.tensorflow_backend import set_session
-# import tensorflow as tf
-# config = tf.ConfigProto()
-# config.gpu_options.allow_growth = True
-# config.gpu_options.per_process_gpu_memory_fraction = 0.9
-# set_session(tf.Session(config=config))
+from keras.backend.tensorflow_backend import set_session
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.9
+set_session(tf.Session(config=config))
 
 #-- constants
 # RUN_TIME = 30
@@ -247,7 +247,8 @@ class Agent:
 
                 else:
                         s = np.array([s])
-                        p, _ = brain.predict_p(s)[0]
+                        p, _ = brain.predict_p(s)
+                        p = p[0]
                         # a = np.argmax(p)
                         a = np.random.choice(NUM_ACTIONS, p=p)
 

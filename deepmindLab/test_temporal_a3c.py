@@ -25,7 +25,7 @@ def main():
     env = SeekAvoidEnv(test=True)
 
     e_rewards = []
-    episodes = 300
+    episodes = 50
 
     save_folder = "episode_images/"
 
