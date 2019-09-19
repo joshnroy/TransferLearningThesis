@@ -68,7 +68,7 @@ class Brain:
                 self.default_graph = tf.get_default_graph()
                 if test:
                     with self.default_graph.as_default():
-                        self.model.load_weights("darla_a3c.h5")
+                        self.model.load_weights("darla_a3c" + sys.argv[1] + ".h5")
 
                 self.default_graph.finalize()   # avoid modifications
 
@@ -97,7 +97,7 @@ class Brain:
 
                 model = Model(inputs=[l_input], outputs=[out_actions, out_value])
                 if test:
-                    model.load_weights("darla_a3c.h5")
+                    model.load_weights("darla_a3c" + sys.argv[1] + ".h5")
                     for layer in model.layers:
                         layer.trainable = False
                 model.summary()
@@ -170,7 +170,7 @@ class Brain:
                                                                          r})
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
-                    self.model.save_weights("darla_a3c.h5", overwrite=True)
+                    self.model.save_weights("darla_a3c" + sys.argv[1] + ".h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 

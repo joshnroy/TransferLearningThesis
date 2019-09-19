@@ -25,7 +25,7 @@ def main():
     env = SeekAvoidEnv(test=True)
 
     e_rewards = []
-    episodes = 300
+    episodes = 50
 
     save_folder = "episode_images/"
 
@@ -36,7 +36,8 @@ def main():
         obs = np.expand_dims(obs, axis=0)
         e_reward = 0.
         while not done:
-            prediction, attention_weights = b.predict_p(obs)[0]
+            prediction, attention_weights = b.predict_p(obs)
+            prediction = prediction[0]
             action = np.argmax(prediction)
             obs, reward, done, _ = env.step(action)
             obs = np.expand_dims(obs, axis=0)
@@ -44,8 +45,6 @@ def main():
             j += 1
         e_rewards.append(e_reward)
     print(np.mean(e_rewards), np.std(e_rewards), np.max(e_rewards), np.min(e_rewards))
-    # plt.hist(e_rewards, int(np.round(np.max(e_rewards))))
-    # plt.show()
 
 if __name__ == "__main__":
     main()
