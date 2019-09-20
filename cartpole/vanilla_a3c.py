@@ -33,7 +33,7 @@ display.start()
 
 
 NUM_ACTIONS = 2
-ENV_SHAPE = (12290, )
+ENV_SHAPE = (32 * 32 * 3 + 2, )
 THREADS = 3
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
@@ -48,7 +48,7 @@ EPS_STOP  = .15
 EPS_STEPS = int(1e5)
 
 MIN_BATCH = 32
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 5e-4
 
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
@@ -87,12 +87,11 @@ class Brain:
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_obs = Lambda(lambda x: x[:, :-2])(l_input)
-                l_obs = Reshape((64, 64, 3))(l_obs)
+                l_obs = Reshape((32, 32, 3))(l_obs)
                 l_vel = Lambda(lambda x: x[:, -2:])(l_input)
 
                 l_hidden = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(l_obs)
                 l_hidden = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(l_hidden)
-                l_hidden = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(l_hidden)
                 l_hidden = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(l_hidden)
 
                 l_hidden = Flatten()(l_hidden)
@@ -101,8 +100,8 @@ class Brain:
                 l_hidden = Dense(64, name='features', activation='linear')(l_hidden)
 
                 l_hidden = Concatenate()([l_hidden, l_vel])
-                l_hidden = Dense(512, activation='relu')(l_hidden)
-                l_hidden = Dense(512, activation='relu')(l_hidden)
+                l_hidden = Dense(128, activation='relu')(l_hidden)
+                l_hidden = Dense(128, activation='relu')(l_hidden)
                 out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_hidden)
                 out_value   = Dense(1, activation='linear')(l_hidden)
 

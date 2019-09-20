@@ -33,8 +33,8 @@ epochs = 1
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("training_data/*.npz")#[0:100]
-        self.image_size = 64
+        self.filenames = glob.glob("training_data_small/*.npz")#[0:100]
+        self.image_size = 32
         self.i = 0
         self.batch_size = 50
         self.npz_idx = 0
@@ -69,20 +69,19 @@ def sampling(args):
     z_mean, z_log_var = args
     batch = K.shape(z_mean)[0]
     # by default, random_normal has mean=0 and std=1.0
-    epsilon = K.random_normal(shape=(batch, 64, 64, 3))
+    epsilon = K.random_normal(shape=(batch, 32, 32, 3))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 # network parameters
 latent_dim = 32
 rp_dim = int(np.round(latent_dim * 0.5))
 s_dim = latent_dim - rp_dim
-input_shape = (64, 64, 3)
+input_shape = (32, 32, 3)
 
 # build encoder network
 encoder_input = Input(shape=input_shape, name='encoder_input')
 x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(encoder_input)
 x_inputs = Conv2D(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
-x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
 x_inputs = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_inputs)
 
 x_inputs = Flatten()(x_inputs)
@@ -97,10 +96,9 @@ decoder_input_mean = Input(shape=(latent_dim,), name="decoder_input_mean")
 decoder_input_log_var = Input(shape=(latent_dim,), name="decoder_input_log_var")
 latents = Concatenate()([decoder_input_mean, decoder_input_log_var])
 x_decoder = Dense(256, activation='relu')(latents)
-x_decoder = Dense(4 * 4 * 64, activation='relu')(x_decoder)
-x_decoder = Reshape((4, 4, 64))(x_decoder)
+x_decoder = Dense(4 * 4 * 32, activation='relu')(x_decoder)
+x_decoder = Reshape((4, 4, 32))(x_decoder)
 
-x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 x_decoder = Conv2DTranspose(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
 x_decoder = Conv2DTranspose(filters=32, kernel_size=4, activation='relu', strides=2, padding='same')(x_decoder)
@@ -142,6 +140,7 @@ if __name__ == '__main__':
     img_generator = DataSequence()
     darla_vae.load_weights("darla_vae.h5")
     if True:
+        darla_vae.summary()
         history = darla_vae.fit_generator(img_generator, epochs=epochs, workers=9)
         darla_vae.save_weights("darla_vae.h5")
         darla_vae.save("full_darla_vae.h5")

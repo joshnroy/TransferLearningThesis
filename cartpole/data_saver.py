@@ -2,6 +2,8 @@ import gym
 import gym_cartpole_visual
 import numpy as np
 from tqdm import trange
+from skimage import io
+import sys
 
 from pyvirtualdisplay import Display
 
@@ -15,7 +17,7 @@ def main():
     observation = env.reset()
     i = 0
     for _ in trange(4000000):
-        imgs.append(np.reshape(observation[:-2], (64, 64, 3)))
+        imgs.append(np.reshape(observation[:-2], (32, 32, 3)))
         vels.append(observation[-2:])
         action = np.random.randint(0, 1)
         observation, reward, done, info = env.step(action)
@@ -27,7 +29,7 @@ def main():
         if len(imgs) > 10000:
             imgs = np.array(imgs)
             vels = np.array(vels)
-            np.savez_compressed("training_data/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
+            np.savez_compressed("training_data_small/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
 
             i += 1
             imgs = []
