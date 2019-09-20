@@ -148,7 +148,7 @@ class Brain:
                 self.loss_attention = tf.reduce_mean(LOSS_ATTENTION * tf.abs(attention_weights))
 
                 # PSEUDO ATTENTION
-                # self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
+                self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
 
                 self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
