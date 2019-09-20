@@ -33,7 +33,7 @@ display.start()
 
 
 NUM_ACTIONS = 2
-ENV_SHAPE = (12290, )
+ENV_SHAPE = (32 * 32 * 3 + 2, )
 THREADS = 3
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
@@ -93,7 +93,7 @@ class Brain:
 
                 l_input = Input( batch_shape=(None,) + ENV_SHAPE)
                 l_obs = Lambda(lambda x: x[:, :-2])(l_input)
-                l_obs = Reshape((64, 64, 3))(l_obs)
+                l_obs = Reshape((32, 32, 3))(l_obs)
                 l_vel = Lambda(lambda x: x[:, -2:])(l_input)
                 l_hidden = encoder(l_obs)
                 l_hidden = Concatenate()(l_hidden + [l_vel])
@@ -354,7 +354,8 @@ def test_a3c(brain, test=False):
         e_reward = 0
         while True:
             p = brain.predict_p(np.expand_dims(observation, axis=0))[0]
-            action = np.random.choice(NUM_ACTIONS, p=p)
+            # action = np.random.choice(NUM_ACTIONS, p=p)
+            action = np.argmax(p)
             observation, reward, done, info = env.step(action)
             e_reward += reward
 
