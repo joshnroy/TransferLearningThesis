@@ -357,7 +357,8 @@ def test_a3c(brain, test=False):
         e_reward = 0
         while True:
             p = brain.predict_p(np.expand_dims(observation, axis=0))[0]
-            action = np.random.choice(NUM_ACTIONS, p=p)
+            # action = np.random.choice(NUM_ACTIONS, p=p)
+            action = np.argmax(p)
             observation, reward, done, info = env.step(action)
             e_reward += reward
 
