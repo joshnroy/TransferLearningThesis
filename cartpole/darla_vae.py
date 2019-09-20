@@ -33,7 +33,7 @@ epochs = 1
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("training_data/*.npz")[0:100]
+        self.filenames = glob.glob("training_data/*.npz")#[0:100]
         self.image_size = 64
         self.i = 0
         self.batch_size = 50
@@ -51,9 +51,9 @@ class DataSequence(Sequence):
             self.npz_idx += 1
             self.data = np.load(self.filenames[self.npz_idx])
             self.images = self.data["images"]
-        self.i += 1
+        self.i = (self.i + 1) // len(self.filenames)
 
-        batch_x = self.images[self.i:self.i*self.batch_size, :, :, :]
+        batch_x = self.images[self.i:self.i+self.batch_size, :, :, :]
 
         return batch_x, None
 
