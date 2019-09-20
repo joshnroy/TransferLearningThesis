@@ -148,7 +148,7 @@ class Brain:
                 self.loss_attention = tf.reduce_mean(LOSS_ATTENTION * tf.abs(attention_weights))
 
                 # PSEUDO ATTENTION
-                self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
+                # self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
 
                 self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
@@ -371,7 +371,8 @@ def test_a3c(brain, test=False):
         while True:
             p, _ = brain.predict_p(np.expand_dims(observation, axis=0))
             p = p[0]
-            action = np.random.choice(NUM_ACTIONS, p=p)
+            # action = np.random.choice(NUM_ACTIONS, p=p)
+            action = np.argmax(p)
             observation, reward, done, info = env.step(action)
             e_reward += reward
 
