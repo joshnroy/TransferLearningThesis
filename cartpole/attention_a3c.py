@@ -85,9 +85,9 @@ class Brain:
                 self.csvwriter.writerow(['Policy Loss', 'Value Loss', 'Reward', 'Frame Count'])
 
         def _build_model(self, test):
-                loaded_json = open("attention_vae_arch.json").read()
+                loaded_json = open("darla_vae_arch.json").read()
                 vae = model_from_json(loaded_json)
-                vae.load_weights("attention_vae.h5")
+                vae.load_weights("darla_vae.h5")
                 encoder = Model(vae.layers[-5].inputs, vae.layers[-5].outputs)
                 for layer in encoder.layers:
                     layer.trainable = False
@@ -101,7 +101,7 @@ class Brain:
 
                 # Learn the attention weights on each factor
                 l_weights = Dense(512, activation='relu')(l_hidden)
-                l_weights = Dense(64, activation='sigmoid')(l_weights)
+                l_weights = Dense(66, activation='sigmoid')(l_weights)
 
                 l_hidden = Lambda(lambda x: x[0] * x[1])([l_hidden, l_weights]) # Element-wise multiply the attention
 
@@ -129,7 +129,7 @@ class Brain:
 
                 self.rewards_mean = tf.reduce_mean(r_t)
 
-                p, v attention_weights = model(s_t)
+                p, v, attention_weights = model(s_t)
 
                 log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
                 advantage = r_t - v
@@ -146,7 +146,9 @@ class Brain:
 
                 # enforce sparsity on attention
                 self.loss_attention = tf.reduce_mean(LOSS_ATTENTION * tf.abs(attention_weights))
-                self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
+
+                # PSEUDO ATTENTION
+                # self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
 
                 self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
