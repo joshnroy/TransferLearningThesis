@@ -20,6 +20,8 @@ import cv2
 import sys
 from tqdm import tqdm, trange
 
+from skimage import io
+
 
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -29,14 +31,14 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.9
 keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 
-epochs = 1
+epochs = 30
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("training_data_small/*.npz")#[0:100]
+        self.filenames = glob.glob("training_data_small/*.npz")[0:2]
         self.image_size = 32
         self.i = 0
-        self.batch_size = 50
+        self.batch_size = 10
         self.npz_idx = 0
         self.data = np.load(self.filenames[self.npz_idx])
         self.images = self.data["images"]
@@ -52,6 +54,9 @@ class DataSequence(Sequence):
             self.data = np.load(self.filenames[self.npz_idx])
             self.images = self.data["images"]
         self.i = (self.i + 1) // len(self.filenames)
+
+        for j, img in enumerate(self.images[self.i:self.i+self.batch_size, :, :, :]):
+            io.imsave("test" + str(j) + ".png", img)
 
         batch_x = self.images[self.i:self.i+self.batch_size, :, :, :]
 
@@ -119,10 +124,10 @@ darla_vae = Model(inputs, outputs, name='darla_vae')
 # Reconstruction loss
 sampled_reconstructions = sampling([outputs[0][:, :, :, :3], outputs[0][:, :, :, 3:]])
 
-reconstruction_loss = K.mean((sampled_reconstructions - encoder_input)**2)
+reconstruction_loss = K.mean((255. * sampled_reconstructions - 255. * encoder_input)**2)
 
 # KL loss
-beta = 175.
+beta = 0.
 kl_loss = 1 + z_mean - K.square(z_log_var) - K.exp(z_mean)
 kl_loss = K.mean(kl_loss, axis=-1)
 kl_loss *= -0.5
@@ -138,28 +143,26 @@ darla_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    darla_vae.load_weights("darla_vae.h5")
+    darla_vae.load_weights("sanity_check.h5")
     if True:
-        darla_vae.summary()
         history = darla_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-        darla_vae.save_weights("darla_vae.h5")
-        darla_vae.save("full_darla_vae.h5")
+        darla_vae.save_weights("sanity_check.h5")
+        darla_vae.save("sanity_check.h5")
     json_string = darla_vae.to_json()
     with open("darla_vae_arch.json", "w") as json_file:
         json_file.write(json_string)
 
 
-    if False: # Test the temporal autoencoder
+    if True: # Test the temporal autoencoder
 # Load Data
-        data = np.load(glob.glob("vae_training_data/*")[0])
-        observations = data["observations"]
-        actions = data["actions"]
+        data = np.load(glob.glob("training_data_small/*.npz")[0])
+        observations = data["images"]
 
-        predictions = darla_vae.predict([observations, actions])
+        predictions = darla_vae.predict(observations)
         predicted_means = predictions[-2]
         predicted_log_vars = predictions[-1]
 
-        if True:
+        if False:
             for j in trange(0, 32):
                 step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
                 predicted_min = predicted_means[:, j].min()
@@ -171,17 +174,23 @@ if __name__ == '__main__':
 
                     # Predict, decode, denoise, and write to file
                     predicted_imgs = decoder.predict([predicted_means, predicted_log_vars])[:, :, :, :3]
-                    denoised_predicted = denoising.predict(predicted_imgs)
-                    denoised_imgs = np.clip(denoised_predicted[35], 0., 1.)
+                    predicted_img = np.clip(predicted_imgs[35], 0., 1.)
                     str_i = str(i)
                     if i < 10:
                         str_i = "0" + str_i
                     str_j = str(j)
                     if j < 10:
                         str_j = "0" + str_j
-                    cv2.imwrite("sweep/denoised_temporal" + str_j + "_" + str_i + ".png", cv2.resize(denoised_imgs * 255., (512, 512)))
+                    cv2.imwrite("sweep/viz" + str_j + "_" + str_i + ".png", cv2.resize(predicted_img * 255., (512, 512)))
                 predicted_means[:, j] = predicted_originals
 
+        if True:
+            for i in range(0, len(predictions[0]), 1000):
+                cv2.imwrite("originals/original" + str(i) + ".png", cv2.resize(observations[i] * 255., (512, 512)))
+                cv2.imwrite("reconstructions/recon" + str(i) + ".png", cv2.resize(predictions[0][i, :, :, :3] * 255., (512, 512)))
+
+
+        sys.exit()
 # Print loss values
         rps = predictions[1]
         print("RP LOSS VALUE", np.mean((rps[1:, :] - rps[:-1, :])**2))

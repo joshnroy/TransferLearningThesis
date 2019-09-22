@@ -48,7 +48,7 @@ EPS_STOP  = .15
 EPS_STEPS = int(1e5)
 
 MIN_BATCH = 32
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient

@@ -16,10 +16,11 @@ def main():
     vels = []
     observation = env.reset()
     i = 0
+    # for _ in trange(10000 * 107, 4000000):
     for _ in trange(4000000):
         imgs.append(np.reshape(observation[:-2], (32, 32, 3)))
         vels.append(observation[-2:])
-        action = np.random.randint(0, 1)
+        action = np.random.randint(0, 2)
         observation, reward, done, info = env.step(action)
         env.change_color(random=True)
 
