@@ -53,6 +53,7 @@ LEARNING_RATE = 5e-4
 LOSS_V = .5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
 LOSS_ATTENTION = 0.01
+PSEUDO_LOSS_ATTENTION = 0.01
 
 
 # In[ ]:
@@ -148,7 +149,7 @@ class Brain:
                 self.loss_attention = tf.reduce_mean(LOSS_ATTENTION * tf.abs(attention_weights))
 
                 # PSEUDO ATTENTION
-                # self.loss_attention += tf.reduce_mean(tf.math.reduce_std(attention_weights, axis=0))
+                self.loss_attention += tf.reduce_mean(PSEUDO_LOSS_ATTENTION * tf.nn.moments(attention_weights, 0)[1])
 
                 self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy + self.loss_attention)
 
@@ -193,7 +194,7 @@ class Brain:
                                                                          r})
                 self.frame_count += len(s)
                 if self.frame_count % (len(s) * 10) == 0:
-                    self.model.save_weights("attention_a3c" + sys.argv[1] + ".h5", overwrite=True)
+                    self.model.save_weights("pseudo_attention_a3c" + sys.argv[1] + ".h5", overwrite=True)
                     self.csvwriter.writerow([policy_loss, value_loss, rewards, self.frame_count])
                     self.csvfile.flush()
 

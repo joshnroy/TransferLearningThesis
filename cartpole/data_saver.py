@@ -22,15 +22,15 @@ def main():
         vels.append(observation[-2:])
         action = np.random.randint(0, 2)
         observation, reward, done, info = env.step(action)
-        env.change_color(random=True)
 
         if done:
+            env.change_color(random=True)
             observation = env.reset()
 
         if len(imgs) > 10000:
             imgs = np.array(imgs)
             vels = np.array(vels)
-            np.savez_compressed("training_data_small/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
+            np.savez_compressed("training_data_small2/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
 
             i += 1
             imgs = []

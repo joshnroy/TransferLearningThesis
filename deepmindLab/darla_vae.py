@@ -142,11 +142,11 @@ darla_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    darla_vae.load_weights("darla_vae.h5")
+    # darla_vae.load_weights("darla_vae.h5")
     if False:
         history = darla_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-        darla_vae.save_weights("darla_vae.h5")
-        darla_vae.save("full_darla_vae.h5")
+        darla_vae.save_weights("darla_vae_viz.h5")
+        darla_vae.save("full_darla_vae_viz.h5")
     json_string = darla_vae.to_json()
     with open("darla_vae_arch.json", "w") as json_file:
         json_file.write(json_string)
