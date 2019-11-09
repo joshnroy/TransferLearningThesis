@@ -32,25 +32,26 @@ display = Display(visible=0, size=(100, 100), backend="xvfb")
 display.start()
 
 
-NUM_ACTIONS = 14
+NUM_ACTIONS = 1
 ENV_SHAPE = (32 * 32 * 3 + 1, )
+# ENV_SHAPE = (3, )
 THREADS = 3
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
 
-N_STEP_RETURN = 8
+N_STEP_RETURN = 1
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.8
-EPS_STOP  = .15
+EPS_STOP  = .01
 EPS_STEPS = int(1e5)
 
 MIN_BATCH = 32
-LEARNING_RATE = 5e-4
+LEARNING_RATE = 0.001
 
-LOSS_V = .5                     # v loss coefficient
+LOSS_V = 0.5                     # v loss coefficient
 LOSS_ENTROPY = .01      # entropy coefficient
 
 
@@ -94,15 +95,16 @@ class Brain:
                 l_hidden = Conv2D(filters=64, kernel_size=4, activation='relu', strides=2, padding='same')(l_hidden)
 
                 l_hidden = Flatten()(l_hidden)
+
                 l_hidden = Dense(256, activation='relu')(l_hidden)
 
                 l_hidden = Dense(64, name='features', activation='linear')(l_hidden)
                 l_hidden = Concatenate()([l_hidden, l_vel])
 
-                l_hidden = Dense(128, activation='relu')(l_hidden)
-                l_hidden = Dense(128, activation='relu')(l_hidden)
-                out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_hidden)
-                # out_actions = Lambda(lambda x: x * 4. - 2.)(out_actions)
+                l_hidden = Dense(48, activation='relu')(l_hidden)
+                l_hidden = Dense(48, activation='relu')(l_hidden)
+                out_actions = Dense(2, activation='tanh')(l_hidden)
+                out_actions = Lambda(lambda x: x * 2.)(out_actions)
                 out_value   = Dense(1, activation='linear')(l_hidden)
 
 
@@ -123,22 +125,25 @@ class Brain:
 
                 self.rewards_mean = tf.reduce_mean(r_t)
 
-                p, v = model(s_t)
+                n_vars, v = model(s_t)
+                dist = tf.distributions.Normal(n_vars[:, 0], n_vars[:, 1])
+                # p = dist.prob(a_t)
 
-                log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
+                log_prob = tf.log(dist.prob(a_t))
                 advantage = r_t - v
 
                 loss_policy = - log_prob * tf.stop_gradient(advantage) # Maximize policy
+                loss_policy = -tf.stop_gradient(advantage) # Maximize policy
                 self.loss_policy = tf.reduce_mean(loss_policy)
 
                 loss_value  = LOSS_V * tf.square(advantage) # minimize value error
                 self.loss_value = tf.reduce_mean(loss_value)
 
                 # maximize entropy (regularization) 
-                entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10),
-                                                       axis=1, keep_dims=True)
+                # entropy = LOSS_ENTROPY * dist.entropy()
 
-                self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+                # self.loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+                self.loss_total = tf.reduce_mean(loss_policy + loss_value)
 
                 optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
                 minimize = optimizer.minimize(self.loss_total)
@@ -238,13 +243,18 @@ class Agent:
                 global frames; frames = frames + 1
 
                 if random.random() < eps:
-                        return random.randint(0, NUM_ACTIONS-1)
+                        # a = random.randint(0, NUM_ACTIONS-1)
+                        a = random.random() * 4. - 2.
+                        return a
 
                 else:
                         s = np.array([s])
-                        p = brain.predict_p(s)[0]
+                        n_vars = brain.predict_p(s)[0]
+                        mu = n_vars[0]
+                        sigma = np.maximum(n_vars[1], 0.)
+                        a = np.random.normal(mu, sigma)
                         # a = np.argmax(p)
-                        a = np.random.choice(NUM_ACTIONS, p=p)
+                        # a = np.random.choice(NUM_ACTIONS, p=p)
 
                         return a
 
@@ -255,10 +265,10 @@ class Agent:
 
                         return s, a, self.R, s_
 
-                a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
-                a_cats[a] = 1
+                # a_cats = np.zeros(NUM_ACTIONS)  # turn action into one-hot representation
+                # a_cats[a] = 1
 
-                self.memory.append( (s, a_cats, r, s_) )
+                self.memory.append( (s, a, r, s_) )
 
                 self.R = ( self.R + r * GAMMA_N ) / GAMMA
 
@@ -357,8 +367,13 @@ def test_a3c(brain, test=False):
         observation = env.reset()
         e_reward = 0
         while True:
-            p = brain.predict_p(np.expand_dims(observation, axis=0))[0]
-            action = np.random.choice(NUM_ACTIONS, p=p)
+            # env.render()
+            n_vars = brain.predict_p(np.expand_dims(observation, axis=0))[0]
+            mu = n_vars[0]
+            sigma = np.maximum(n_vars[1], 0.)
+            a = np.random.normal(mu, sigma)
+            # action = np.random.choice(NUM_ACTIONS, p=p)
+            env.render()
             # action = np.argmax(p)
             # action = p
             observation, reward, done, info = env.step(action)
@@ -376,40 +391,43 @@ def test_a3c(brain, test=False):
 
 
 if __name__ == "__main__":
-    env_test = Environment(render=False, eps_start=0., eps_end=0.)
-    NONE_STATE = np.zeros(ENV_SHAPE)
+    if True:
+        env_test = Environment(render=False, eps_start=0., eps_end=0.)
+        NONE_STATE = np.zeros(ENV_SHAPE)
 
-    brain = Brain() # brain is global in A3C
+        brain = Brain() # brain is global in A3C
 
-    envs = [Environment() for i in range(THREADS)]
-    opts = [Optimizer() for i in range(OPTIMIZERS)]
+        envs = [Environment() for i in range(THREADS)]
+        opts = [Optimizer() for i in range(OPTIMIZERS)]
 
-    main_lock = Lock()
-    for o in opts:
-            o.start()
+        main_lock = Lock()
+        for o in opts:
+                o.start()
 
-    for e in envs:
-            e.start()
+        for e in envs:
+                e.start()
 
-    num_frames = 1e6
-    tq = tqdm(total=num_frames)
-    last_frame = 0
-    while brain.frame_count < num_frames:
-        tq.update(brain.frame_count - last_frame)
-        last_frame = brain.frame_count
-        time.sleep(10)
-    tq.close()
+        num_frames = 1e6
+        tq = tqdm(total=num_frames)
+        last_frame = 0
+        while brain.frame_count < num_frames:
+            tq.update(brain.frame_count - last_frame)
+            last_frame = brain.frame_count
+            time.sleep(10)
+        tq.close()
 
-    for e in envs:
-            e.stop()
-    for e in envs:
-            e.join()
+        for e in envs:
+                e.stop()
+        for e in envs:
+                e.join()
 
-    for o in opts:
-            o.stop()
-    for o in opts:
-            o.join()
+        for o in opts:
+                o.stop()
+        for o in opts:
+                o.join()
 
+    else:
+        brain = Brain(test=True)
     rewards = test_a3c(brain, test=False)
     print("TRAINING REWARDS", np.mean(rewards), np.std(rewards), np.min(rewards), np.max(rewards))
     rewards = test_a3c(brain, test=True)
