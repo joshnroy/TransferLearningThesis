@@ -29,7 +29,7 @@ class ReplayMemory():
         return len(self.memory)
 
 class DQN():
-    def __init__(self, env, dqn_net, action_size, state_shape, learning_rate=1e-3, eps=0.1, num_episodes=100, num_test_episodes=10, batch_size=200, update_interval=500):
+    def __init__(self, env, dqn_net, action_size, state_shape, learning_rate=1e-3, eps=0.1, num_episodes=40, num_test_episodes=10, batch_size=200, update_interval=2000):
         # Pytorch specific
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -111,6 +111,7 @@ class DQN():
                 # Update target network
                 if global_step % self.update_interval:
                     self.target_net.load_state_dict(self.dqn_net.state_dict())
+                    self.target_net.eval()
 
                 # Train DQN
                 # Q(s, a) = r + gamma * max_a' Q(s', a')

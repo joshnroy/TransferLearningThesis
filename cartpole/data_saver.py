@@ -15,9 +15,10 @@ def main():
     imgs = []
     vels = []
     observation = env.reset()
+    print(observation.shape)
+    sys.exit()
     i = 0
-    # for _ in trange(10000 * 107, 4000000):
-    for _ in trange(4000000):
+    for _ in trange(100000):
         imgs.append(np.reshape(observation[:-2], (32, 32, 3)))
         vels.append(observation[-2:])
         action = np.random.randint(0, 2)

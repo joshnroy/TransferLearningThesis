@@ -2,5 +2,5 @@
     "git.ignoreLimitWarning": true,
     "python.jediEnabled": false,
     "python.linting.pylintEnabled": true,
-    "python.pythonPath": "/home/josh/.pyenv/versions/3.6.7/bin/python"
+    "python.pythonPath": "/opt/miniconda3/envs/ICLR2020/bin/python"
 }
