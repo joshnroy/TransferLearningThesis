@@ -16,9 +16,9 @@ from dqn import DQN, ReplayMemory
 class DQN_network(nn.Module):
     def __init__(self):
         super(DQN_network, self).__init__()
-        self.fc1 = nn.Linear(5, 48)
-        self.fc2 = nn.Linear(48, 48)
-        self.fc3 = nn.Linear(48, 1)
+        self.fc1 = nn.Linear(5, 24)
+        self.fc2 = nn.Linear(24, 24)
+        self.fc3 = nn.Linear(24, 1)
 
     def forward(self, x):  # pylint: disable=arguments-differ
         x = F.relu(self.fc1(x))
