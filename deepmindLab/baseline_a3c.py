@@ -14,6 +14,13 @@ from seekavoid_gymlike_wrapper import SeekAvoidEnv
 
 import deepmind_lab
 
+from keras.backend.tensorflow_backend import set_session
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.9
+set_session(tf.Session(config=config))
+
 
 #-- constants
 # RUN_TIME = 30
