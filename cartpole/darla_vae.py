@@ -31,14 +31,14 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.9
 keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
 
 
-epochs = 30
+epochs = 3
 
 class DataSequence(Sequence):
     def __init__(self):
-        self.filenames = glob.glob("training_data_small/*.npz")[0:2]
+        self.filenames = glob.glob("training_data_small2/*.npz")
         self.image_size = 32
         self.i = 0
-        self.batch_size = 10
+        self.batch_size = 50
         self.npz_idx = 0
         self.data = np.load(self.filenames[self.npz_idx])
         self.images = self.data["images"]
@@ -50,13 +50,13 @@ class DataSequence(Sequence):
     def __getitem__(self, idx):
         if (self.i * self.batch_size) > self.npz_len:
             self.i = 0
-            self.npz_idx += 1
+            self.npz_idx = (self.npz_idx + 1) // len(self.filenames)
             self.data = np.load(self.filenames[self.npz_idx])
             self.images = self.data["images"]
-        self.i = (self.i + 1) // len(self.filenames)
+        self.i += 1
 
-        for j, img in enumerate(self.images[self.i:self.i+self.batch_size, :, :, :]):
-            io.imsave("test" + str(j) + ".png", img)
+        # for j, img in enumerate(self.images[self.i:self.i+self.batch_size, :, :, :]):
+        #     io.imsave("test" + str(j) + ".png", img)
 
         batch_x = self.images[self.i:self.i+self.batch_size, :, :, :]
 
@@ -127,7 +127,7 @@ sampled_reconstructions = sampling([outputs[0][:, :, :, :3], outputs[0][:, :, :,
 reconstruction_loss = K.mean((255. * sampled_reconstructions - 255. * encoder_input)**2)
 
 # KL loss
-beta = 0.
+beta = 175.
 kl_loss = 1 + z_mean - K.square(z_log_var) - K.exp(z_mean)
 kl_loss = K.mean(kl_loss, axis=-1)
 kl_loss *= -0.5
@@ -143,11 +143,11 @@ darla_vae.compile(optimizer=adam)
 
 if __name__ == '__main__':
     img_generator = DataSequence()
-    darla_vae.load_weights("sanity_check.h5")
+    # darla_vae.load_weights("sanity_check_darla2.h5")
     if True:
         history = darla_vae.fit_generator(img_generator, epochs=epochs, workers=9)
-        darla_vae.save_weights("sanity_check.h5")
-        darla_vae.save("sanity_check.h5")
+        darla_vae.save_weights("sanity_check_darla2.h5")
+        darla_vae.save("sanity_check_darla2.h5")
     json_string = darla_vae.to_json()
     with open("darla_vae_arch.json", "w") as json_file:
         json_file.write(json_string)
@@ -155,14 +155,14 @@ if __name__ == '__main__':
 
     if True: # Test the temporal autoencoder
 # Load Data
-        data = np.load(glob.glob("training_data_small/*.npz")[0])
+        data = np.load(glob.glob("training_data_small2/*.npz")[0])
         observations = data["images"]
 
         predictions = darla_vae.predict(observations)
         predicted_means = predictions[-2]
         predicted_log_vars = predictions[-1]
 
-        if False:
+        if True:
             for j in trange(0, 32):
                 step_size = (predicted_means[:, j].max() - predicted_means[:, j].min()) / 50.
                 predicted_min = predicted_means[:, j].min()
@@ -184,10 +184,12 @@ if __name__ == '__main__':
                     cv2.imwrite("sweep/viz" + str_j + "_" + str_i + ".png", cv2.resize(predicted_img * 255., (512, 512)))
                 predicted_means[:, j] = predicted_originals
 
-        if True:
+        if False:
             for i in range(0, len(predictions[0]), 1000):
-                cv2.imwrite("originals/original" + str(i) + ".png", cv2.resize(observations[i] * 255., (512, 512)))
-                cv2.imwrite("reconstructions/recon" + str(i) + ".png", cv2.resize(predictions[0][i, :, :, :3] * 255., (512, 512)))
+                img = observations[i]
+                cv2.imwrite("originals/original" + str(i) + ".png", cv2.resize(img * 255., (512, 512)))
+                predicted = darla_vae.predict(np.expand_dims(img, axis=0))[0][0, :, :, :3]
+                cv2.imwrite("reconstructions/recon" + str(i) + ".png", cv2.resize(predicted * 255., (512, 512)))
 
 
         sys.exit()

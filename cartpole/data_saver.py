@@ -15,22 +15,23 @@ def main():
     imgs = []
     vels = []
     observation = env.reset()
+    print(observation.shape)
+    sys.exit()
     i = 0
-    # for _ in trange(10000 * 107, 4000000):
-    for _ in trange(4000000):
+    for _ in trange(100000):
         imgs.append(np.reshape(observation[:-2], (32, 32, 3)))
         vels.append(observation[-2:])
         action = np.random.randint(0, 2)
         observation, reward, done, info = env.step(action)
-        env.change_color(random=True)
 
         if done:
+            env.change_color(random=True)
             observation = env.reset()
 
         if len(imgs) > 10000:
             imgs = np.array(imgs)
             vels = np.array(vels)
-            np.savez_compressed("training_data_small/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
+            np.savez_compressed("training_data_small2/cartpole_vae_training_data" + str(i), images=imgs, vels=vels)
 
             i += 1
             imgs = []
