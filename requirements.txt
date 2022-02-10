@@ -64,7 +64,7 @@ setproctitle==1.1.10
 six==1.11.0
 tensorboard==1.11.0
 tensorboardX==1.4
-tensorflow==1.11.0
+tensorflow==2.5.3
 termcolor==1.1.0
 torch==0.4.1
 torchvision==0.2.1
