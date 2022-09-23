@@ -43,7 +43,7 @@ path.py==11.5.0
 Pillow==5.3.0
 plotly==3.4.2
 pluggy==0.8.0
-protobuf==3.6.1
+protobuf==3.18.3
 psutil==5.4.8
 py==1.7.0
 py-spy==0.1.10
